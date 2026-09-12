@@ -1,6 +1,6 @@
-# Activity Forecast Service — Implementation Plan
+# Activity Forecast Service — Design
 
-Hand-off plan for implementation. Facts marked **verified** were checked with live calls to the Open-Meteo APIs from this machine on 2026-09-10; everything else is a design decision with its reasoning attached.
+Design reference for the implementation. The order of work and the definitions of done are in [PHASES.md](PHASES.md); the paper trail is in [DECISIONS.md](DECISIONS.md), [QUESTIONS.md](QUESTIONS.md) and [WORKLOG.md](WORKLOG.md). Written 2026-09-10; light updates on 2026-09-12 are marked *(2026-09-12)*. Facts marked **verified** were checked with live calls to the Open-Meteo APIs from this machine on 2026-09-10; everything else is a design decision with its reasoning attached.
 
 The brief, verbatim: *Build a backend service that takes a city or town and ranks how good the next 7 days will be for skiing, surfing, outdoor sightseeing and indoor sightseeing. Open-Meteo provides the weather data. Persist it rather than calling the API on every request; how you model, store, and refresh it is part of the problem. Node.js and GraphQL; storage is your call. No front end. A focused submission that reasons well beats an exhaustive one.*
 
@@ -11,7 +11,7 @@ The brief, verbatim: *Build a backend service that takes a city or town and rank
 - **Refresh:** TTL freshness (weather 3 h, marine 6 h), stale-while-revalidate up to 24 h, single-flight per location, background refresh of recently used locations, weekly negative cache for inland marine.
 - **Scoring:** per activity, weighted criteria with piecewise-linear desirability curves over *daytime* features, multiplied by safety and feasibility gates. Every score ships with its factors and a lead-time confidence.
 - **API:** `activityRankings(city, countryCode?, activities?)` returns the 7 days ranked per activity; `searchLocations` disambiguates names.
-- **Delivery:** 11 ordered steps in §11, each with a definition of done; README outline in §12.
+- **Delivery:** eight phases in [PHASES.md](PHASES.md) *(2026-09-12: regrouped from the 11 steps that were in §11)*; README outline in §12.
 
 ---
 
@@ -55,7 +55,7 @@ latitude=..&longitude=..&timezone=auto&forecast_days=8
 ```
 
 - Response: `latitude`, `longitude` (the grid cell actually used; differs slightly from the request), `elevation` (grid-cell elevation), `timezone`, `utc_offset_seconds`, `hourly_units`, `hourly: { time: string[], <var>: (number|null)[] }`, `daily_units`, `daily: { … }`.
-- With `timezone=auto`, `hourly.time` entries are local wall-clock strings with no offset, e.g. `2026-09-10T13:00`; `daily.time` is `2026-09-10`. 8 days → 192 hourly rows starting at local midnight. Local hour is `Number(t.slice(11, 13))`, local date is `t.slice(0, 10)`. No date library needed.
+- With `timezone=auto`, `hourly.time` entries are local wall-clock strings with no offset, e.g. `2026-09-10T13:00`; `daily.time` is `2026-09-10`. 8 days → 192 hourly rows starting at local midnight. Local hour is `Number(t.slice(11, 13))`, local date is `t.slice(0, 10)`. No date library needed. *(2026-09-12, D-012: the service passes the geocoder's IANA zone explicitly, e.g. `timezone=Europe/Lisbon`, instead of `auto`, so "today" and these strings agree by construction; the response format is identical.)*
 - Units: °C; `precipitation` mm; `snowfall` **cm**; `snow_depth` **metres**; `visibility` metres; wind km/h; `sunshine_duration` and `daylight_duration` seconds; `is_day` 0/1; `weather_code` WMO.
 - Payload ≈ 17 KB per location for 8 days.
 - Any array element may be `null` for some models/regions. Type everything as `number | null` and aggregate defensively.
@@ -85,12 +85,12 @@ Severity order for "worst code in window": thunderstorm > freezing precipitation
 
 | Concern | Choice | Why |
 |---|---|---|
-| Runtime | Node ≥ 22.13 (LTS), TypeScript **5.9**, ESM, `strict` | Native `fetch`, native `node:sqlite`, `Intl` timezones. Pin in `engines` and `.nvmrc`. TS 7.0 just shipped; stay on 5.9 to avoid tooling surprises. |
-| GraphQL | `graphql-yoga` 5 with `graphql` 16, schema-first SDL | Small, spec-compliant, ships GraphiQL, and `yoga.fetch()` makes integration tests trivial without opening a port. Yoga's peer range is graphql 15–17; 16 is the most exercised. (Apollo Server would be equally fine; do not use both.) |
+| Runtime | Node ≥ 22.13 (LTS), TypeScript **5.9**, ESM, `strict` | Native `fetch`, native `node:sqlite`, `Intl` timezones. Pin in `engines` (≥ 22.13) and `.nvmrc` (24, the active LTS) *(2026-09-12, D-007)*. TS 7.0 just shipped; stay on 5.9 to avoid tooling surprises. |
+| GraphQL | `graphql-yoga` 5 with `graphql` 16, schema-first SDL | Small, spec-compliant, ships GraphiQL, and `yoga.fetch()` makes integration tests trivial without opening a port. Yoga's peer range is graphql 15–17; 16 is the most exercised *(2026-09-12: graphql 17.0 has been out since June; staying on 16, D-007)*. (Apollo Server would be equally fine; do not use both.) |
 | Storage | SQLite via the built-in `node:sqlite` (`DatabaseSync`) | No native build step, one file, transactional, WAL. **Verified** working here (SQLite 3.52). Data volume is tens of KB per location. A Postgres port touches only the repository module (§5.4). |
 | Validation | `zod` 4 | Parse Open-Meteo responses and env at the boundary; typed everywhere inside. |
 | Logging | `pino` | One structured line per upstream call and refresher cycle. |
-| Tests | `vitest` 5 | Fast, TypeScript-native, fake timers. |
+| Tests | `vitest` 4.1 *(2026-09-12: 5.0.0 shipped 2026-09-03, too fresh for a take-home; D-007)* | Fast, TypeScript-native, fake timers. |
 | Dev | `tsx` for `npm run dev`; `tsc --noEmit` for typecheck | Minimal toolchain. |
 
 Do **not** add: an ORM, Redis, a queue, Docker Compose with Postgres, `axios`, a date library, DataLoader, a plugin system, persisted scores. Runtime dependencies should stay around five.
@@ -163,6 +163,8 @@ scripts/
   score-fixture.ts               prints a score table for a fixture — for eyeballing the curves
 ```
 
+*(2026-09-12)* The SDL and the migration are embedded as TypeScript string modules — `graphql/schema.ts` and `adapters/db/migrations/001_init.ts` — so `tsc` output needs no asset-copy step (D-009). The tree above keeps the original names for the record.
+
 Dependency rule: `domain` imports nothing from `services` or `adapters`. Services depend on interfaces (`ForecastClient`, `MarineClient`, `GeocodingClient`, `SnapshotRepository`, `LocationRepository`, `Clock`) so tests inject fakes. `fetch` is injected into the HTTP wrapper.
 
 ---
@@ -217,7 +219,7 @@ CREATE INDEX ix_snapshots_latest ON forecast_snapshots (location_id, source, fet
 CREATE TABLE schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL);
 ```
 
-Query-key normalisation: `name.trim().toLowerCase().replace(/\s+/g, ' ')` + `'|'` + `(countryCode ?? '').toUpperCase()`.
+Query-key normalisation: `name.normalize('NFC').trim().toLowerCase().replace(/\s+/g, ' ')` + `'|'` + `(countryCode ?? '').toUpperCase()` *(NFC added 2026-09-12, D-012)*.
 
 ### 5.2 Why raw JSON snapshots rather than normalised hourly rows
 
@@ -267,10 +269,10 @@ Every `REFRESH_INTERVAL_MINUTES` (10): load locations with `last_requested_at` w
 
 ### 6.4 Failure handling
 
-- HTTP: `AbortSignal.timeout(HTTP_TIMEOUT_MS)`, one retry after 500 ms on network errors and 5xx, no retry on 4xx, `User-Agent: activity-forecast/<version>`. Errors are `UpstreamError { status?, retryable }`. A zod parse failure is treated as an upstream error and logged with its first issue.
+- HTTP: `AbortSignal.timeout(HTTP_TIMEOUT_MS)`, one retry after 500 ms on network errors and 5xx, no retry on 4xx. *(2026-09-12, D-012)* 429 is not retried either, since a second call within the same second cannot help, but it is `retryable: true` so a stale snapshot gets served. `User-Agent` is the constant `activity-forecast/1.0`. Errors are `UpstreamError { status?, retryable }`. A zod parse failure is treated as an upstream error and logged with its first issue.
 - Weather fetch fails: serve stale if one exists (`stale: true`), else `UPSTREAM_UNAVAILABLE`.
 - Marine fetch fails: serve stale marine if it exists; otherwise return the response with surfing `applicable: false` and note "wave data temporarily unavailable". A marine outage must not take down the other three activities. This is distinct from the stored `unavailable` snapshot (inland), whose note says there is no wave-model coverage.
-- Geocoding fails: `UPSTREAM_UNAVAILABLE`. Misses are cached for `GEOCODE_MISS_TTL_HOURS` (24); hits for `GEOCODE_TTL_DAYS` (30).
+- Geocoding fails: `UPSTREAM_UNAVAILABLE`. Misses are cached for `GEOCODE_MISS_TTL_HOURS` (24); hits for `GEOCODE_TTL_DAYS` (30). *(2026-09-12, D-012)* `searchLocations` is a pass-through with no cache and does not touch `last_requested_at`; a geocoder outage is `UPSTREAM_UNAVAILABLE` there too.
 - Background refresh rejections are caught and logged; never an unhandled rejection.
 
 ---
@@ -312,11 +314,11 @@ type ActivityRules = { window: Window; criteria: Criterion[]; gates: Gate[]; app
 ```
 
 - **Criterion** contributes `weight × desirability(feature)`; desirability is the curve value in [0, 1].
-- **Gate** returns a multiplier in [0, 1], normally 1. Gates model "unsafe or impossible" (thunderstorm, no snow, flat sea), which a weighted average would wrongly dilute.
+- **Gate** returns a multiplier in [0, 1], normally 1. Gates model "unsafe or impossible" (thunderstorm, no snow, flat sea), which a weighted average would wrongly dilute. *(2026-09-12, D-011: also anything that dominates the day regardless of the rest, such as rain on snow, a whiteout or a washout. Working the numbers showed the weighted average padding those cases into GOOD and EXCELLENT.)*
 - **Score** `= round(100 × Σ(wᵢ·dᵢ) / Σwᵢ × Π gates)`, sums over criteria whose feature is present. Missing data renormalises the weights (it neither counts as 0 nor 1) and lowers confidence. If no criterion has data, the day is `NOT_APPLICABLE` with note "insufficient data".
 - **Label**: ≥ 80 EXCELLENT · ≥ 60 GOOD · ≥ 40 FAIR · ≥ 20 POOR · else UNSUITABLE; `NOT_APPLICABLE` when the activity cannot be assessed.
-- **Confidence** (reported, never folded into the score): by lead time `[0.95, 0.90, 0.80, 0.70, 0.60, 0.50, 0.45]` for day 0…6, minus 0.1 if any criterion was skipped for missing data, floored at 0.2. A stated heuristic; the honest upgrade is Open-Meteo's Ensemble API (member spread).
-- **Ranking**: score desc, then confidence desc, then date asc; rank 1…7.
+- **Confidence** (reported, never folded into the score): by lead time `[0.95, 0.90, 0.80, 0.70, 0.60, 0.50, 0.45]` for day 0…6, minus 0.1 if any criterion was skipped for missing data, floored at 0.2. A stated heuristic; the honest upgrade is Open-Meteo's Ensemble API (member spread). Snapshot age is not folded in either; it is exposed as `weatherFetchedAt`, `marineFetchedAt` and `stale` *(2026-09-12, D-012)*.
+- **Ranking**: score desc, then confidence desc, then date asc; rank 1…7. Days that are `NOT_APPLICABLE` for lack of data sort after every scored day, by date *(2026-09-12, D-012)*.
 - **Factors**: every criterion (`effect` = desirability, `weight`) and every gate with `effect < 1`. Gates first, then criteria by `weight × (1 − effect)` descending, so the first factor is always the biggest reason the score is not 100. `value` is a formatted string with unit and statistic, e.g. `"-4.2 °C daytime mean"`.
 
 ### 7.3 Skiing — window 09:00–16:00
@@ -328,6 +330,8 @@ Gates
 | snowCover | `snowDepthMaxM` | `[[0.02, 0], [0.10, 0.5], [0.30, 1]]`. If undefined → 0.5, note "snow depth not provided by model", confidence −0.2. |
 | liftWind | `gustMaxKmh` | `[[50, 1], [80, 0.2], [100, 0]]` |
 | severe | codes | thunderstorm (95, 96, 99) → 0.1; freezing rain/drizzle (56, 57, 66, 67) → 0.3 |
+| rainOnSnow *(2026-09-12, D-011)* | `rainMm` | `[[0.5, 1], [3, 0.5], [8, 0.25]]`. Rain ruins the surface no matter how good the rest is; as a criterion alone, a 5 mm day at +1 °C still scored GOOD (60 under grey skies, 74 with everything else ideal). |
+| whiteout *(2026-09-12, D-011)* | `visibilityMinM` | `[[100, 0.2], [500, 0.6], [1000, 1]]`. A 150 m day scored 82 when visibility was only a criterion. |
 
 Criteria
 
@@ -342,13 +346,13 @@ Criteria
 
 ### 7.4 Surfing — window: daylight hours
 
-Applicable iff the marine snapshot has `status = 'ok'`. Otherwise `applicable: false` with note "No wave-model coverage near {name}; Open-Meteo's marine grid returns no data for inland locations." Days are still listed with score 0 and `NOT_APPLICABLE` so the response shape is uniform.
+Applicable iff the marine snapshot has `status = 'ok'`. Otherwise `applicable: false` with note "No wave-model coverage near {name}; Open-Meteo's marine grid returns no data for inland locations." Days are still listed, in date order with ranks 1–7 by position, score 0 and `NOT_APPLICABLE`, so the response shape is uniform *(ordering made explicit 2026-09-12, D-012)*.
 
 Gates
 
 | Gate | Feature | Rule |
 |---|---|---|
-| flat | `waveHeightMeanM` | `[[0.2, 0], [0.3, 0.3], [0.4, 1]]` |
+| flat | `waveHeightMeanM` | `[[0.2, 0], [0.4, 0.5], [0.7, 1]]` *(2026-09-12, D-011: was `[[0.2, 0], [0.3, 0.3], [0.4, 1]]`. With the old gate a 0.6 m / 7 s day scored 67 GOOD because the comfort criteria padded it; small waves now cap the day.)* |
 | dangerous | `waveHeightMaxM` | `[[3.5, 1], [5, 0.3], [6, 0]]` |
 | storm | `gustMaxKmh` | `[[60, 1], [90, 0]]` |
 | severe | codes | thunderstorm → 0.05 (lightning on open water) |
@@ -375,6 +379,7 @@ Gates
 | dangerousWind | `gustMaxKmh` | `[[70, 1], [90, 0.4], [110, 0.1]]` |
 | extremeHeat | `apparentMaxC` | `[[38, 1], [42, 0.5], [46, 0.2]]` |
 | fog | `visibilityMinM` | `[[200, 0.6], [1000, 1]]` (views obscured) |
+| washout *(2026-09-12, D-011)* | `precipHours` | `[[2, 1], [4, 0.7], [6, 0.4], [9, 0.2]]`. Hours of rain dominate a touring day; as a criterion alone, 6 h of rain still scored 51 because temperature, wind and sky were fine. |
 
 Criteria
 
@@ -397,12 +402,36 @@ Criteria
 - Factors: `outdoorConditions` (effect `= 1 − outdoor/100`, note e.g. "outdoor score 23: strong case for an indoor day") plus any travel gate.
 - README must say plainly: venue opening days and hours dominate real indoor planning and are out of scope.
 
-### 7.7 Sanity expectations — manual checks after implementation
+### 7.7 Sanity checks
 
-- Chamonix in September: skiing UNSUITABLE (snow-cover gate), surfing NOT_APPLICABLE.
-- Lisbon: surfing applicable; a 0.6 m / 7 s day lands around FAIR; outdoor EXCELLENT on a dry 27 °C day.
-- Denver: surfing NOT_APPLICABLE; indoor ranks highest on the wettest day.
-- Everywhere: scores within [0, 100]; 7 days per activity; ranks 1–7 unique; indoor order ≈ reverse of outdoor order.
+*(2026-09-12, D-011)* The original list at the end of this section was a poor gate: two of its claims do not follow from the curves (a 0.6 m / 7 s surf day scores 67 GOOD, not FAIR; an outdoor day with 6 h of rain scores 51 FAIR, not ≤ 20), and the rest depend on whatever weather the fixtures happened to capture. The gate is now the table below: one hand-built `DayFeatures` per row, one unit test per row, asserting the band. The reference score was computed from the §7.3–7.6 curves with the D-011 gates on 2026-09-12; assert the band, not the number.
+
+| Activity | Hand-built `DayFeatures` | Band | Ref |
+|---|---|---|---|
+| Skiing | ideal: −6 °C mean, snow depth 0.5 m, 10 cm fresh, wind 8, gusts 20, visibility 10 km, cloud 20 %, rain 0, code 0 | ≥ 85, EXCELLENT | 100 |
+| Skiing | no snow: ideal with snow depth 0 | ≤ 5, UNSUITABLE; first factor is `snowCover` | 0 |
+| Skiing | rain on snow: +1 °C, rain 5 mm, depth 0.5 m, cloud 100 %, visibility 3 km, wind 15, gusts 25, fresh 0, code 61 | ≤ 30 | 24 |
+| Skiing | whiteout: ideal with visibility 150 m | ≤ 25 | 21 |
+| Skiing | thunderstorm: ideal with code 95 | ≤ 10 | 10 |
+| Surfing | ideal: 1.5 m mean / 1.8 m max, 12 s swell, wind 8, gusts 15, wind-wave 0.3 m, SST 20, apparent 22, 0 rain h, code 1 | ≥ 85 | 100 |
+| Surfing | small and weak: 0.6 m / 0.8 m max, 7 s, wind 15, gusts 25, wind-wave 0.3 m, SST 18, apparent 20, code 1 | 40–65, FAIR or low GOOD | 56 |
+| Surfing | flat: ideal with 0.3 m / 0.4 m max, 10 s, wind 5 | ≤ 20 | 17 |
+| Surfing | thunderstorm: ideal with code 95 | ≤ 5 | 5 |
+| Surfing | no marine data | `applicable: false`; every day NOT_APPLICABLE with score 0 | — |
+| Outdoor | ideal: apparent mean 24 °C / max 28, 0 rain h, 0 mm, prob 5 %, wind 10, gusts 20, sunshine 0.9, visibility 20 km, snow 0, code 0 | ≥ 85 | 99 |
+| Outdoor | showers: ideal with 2 rain h, 3 mm, prob 50 %, apparent 18 / 21, wind 12, sunshine 0.4, code 80 | 60–85 | 79 |
+| Outdoor | washout: ideal with 6 rain h, 12 mm, prob 85 %, apparent 14 / 16, wind 20, gusts 35, sunshine 0.1, code 63 | ≤ 25 | 20 |
+| Outdoor | thunderstorm: ideal with code 95 | ≤ 20 | 15 |
+| Indoor | from outdoor 100, no travel gate | exactly 55, FAIR | 55 |
+| Indoor | from outdoor 0 | 100 | 100 |
+| Indoor | from the washout day | ≥ 85 | 91 |
+| Indoor | blizzard: outdoor 10, snowfall 20 cm, gusts 60 (travel gate 0.7) | ≤ 75 | 67 |
+
+Invariants, tested on the fixtures and on generated inputs: every score within [0, 100]; 7 days per activity; ranks 1–7 unique; factors ordered by influence; gates multiply; with every travel gate at 1 the indoor order is the reverse of the outdoor order.
+
+Plausibility run, after the bands pass: `npm run score-fixture -- chamonix|lisbon|denver`. Paste the tables into the worklog and note anything that looks wrong. A wrong-looking number becomes a new row above (a failing test) before any curve moves.
+
+The original 2026-09-10 list (Chamonix skiing UNSUITABLE in September, a Lisbon 0.6 m / 7 s day "around FAIR", Denver indoor best on the wettest day) was fixture-dependent and partly wrong; see D-011.
 
 ---
 
@@ -444,6 +473,7 @@ type ActivityRankings {
 }
 
 type Location {
+  "GeoNames id from the geocoder; stable across databases."
   id: ID!
   name: String!
   country: String
@@ -460,7 +490,7 @@ type ForecastMeta {
   source: String!
   weatherFetchedAt: DateTime!
   marineFetchedAt: DateTime
-  "True when served beyond the freshness TTL (refresh in progress, or upstream unavailable)."
+  "True when either served snapshot is past its freshness TTL (a refresh is in progress, or upstream was unavailable)."
   stale: Boolean!
   marineAvailable: Boolean!
   "Distance from the town to the wave-model cell used, when marine data exists."
@@ -535,7 +565,7 @@ query {
 
 | Code | When |
 |---|---|
-| `BAD_USER_INPUT` | empty city, city > 100 chars, country code not two letters, `limit` outside 1–10 |
+| `BAD_USER_INPUT` | `city` or `query` empty or over 100 chars after trimming, country code not two letters, `limit` outside 1–10, an empty `activities` list (duplicates are collapsed, order kept) *(activities and query rules added 2026-09-12, D-012)* |
 | `LOCATION_NOT_FOUND` | geocoder returns nothing (negative-cached) |
 | `UPSTREAM_UNAVAILABLE` | Open-Meteo unreachable and no servable snapshot |
 
@@ -561,6 +591,8 @@ Yoga masks unexpected errors by default. Keep that; throw `GraphQLError` only fo
 | `SNAPSHOT_RETENTION_HOURS` | `48` | |
 | `LOG_LEVEL` | `info` | |
 
+*(2026-09-12, D-012)* No dotenv. `npm start` runs `node --env-file-if-exists=.env dist/index.js` (Node ≥ 22.9); `npm run dev` uses the defaults or exported variables. `.npmrc` sets `engine-strict=true` so `npm ci` on an unsupported Node fails immediately instead of failing later on `node:sqlite`.
+
 ---
 
 ## 10. Testing strategy — Vitest, no network in tests
@@ -577,19 +609,7 @@ Yoga masks unexpected errors by default. Keep that; throw `GraphQLError` only fo
 
 ## 11. Implementation steps — in order, each with a definition of done
 
-0. **Fixtures.** `git init`. Write `scripts/capture-fixtures.ts`; run it once to save geocoding (Chamonix, Lisbon, Denver, plus a no-result query), forecast ×3, marine ×3 (Denver is the all-null inland case) under `test/fixtures/open-meteo/`. DoD: files exist; `test/fixtures/README.md` records the capture date and which file is the inland case.
-1. **Scaffold.** `package.json` (`"type": "module"`, `engines.node >= 22.13`, scripts `dev`, `start`, `build`, `typecheck`, `test`, `check`, `capture-fixtures`), `tsconfig.json` (`module: NodeNext`, `target: ES2022`, `strict`), vitest config, `.nvmrc`, `.env.example`, `.gitignore` (`data/`, `node_modules/`, `dist/`). DoD: `npm run check` (typecheck + test) passes on a placeholder test.
-2. **Storage.** `database.ts` (open, PRAGMAs, migrations tracked in `schema_migrations`), both repositories, `Clock`. DoD: repository tests on `:memory:` cover insert / getLatest / prune-keeps-newest / upsert / cacheQuery / touch / recentlyRequested.
-3. **Adapters.** `http.ts`, zod schemas, three clients, `UpstreamError`, haversine helper. DoD: adapter tests pass on fixtures with an injected fake `fetch`.
-4. **LocationService.** normalise → cache → geocoder → upsert → cache; negative caching; `search()` pass-through for `searchLocations`. DoD: §10 tests.
-5. **ForecastService.** freshness evaluation (§6.1), `getBundle()`, `refresh()` with single-flight, stale-while-revalidate, marine-unavailable handling. DoD: §10 policy tests; background rejections are caught and logged.
-6. **Feature extraction** plus weather-code table and `DaySummary`. DoD: fixture-driven tests.
-7. **Scoring.** curve, engine, four activities, registry, confidence, ranking, factors; `scripts/score-fixture.ts`. DoD: activity tests with score bands; the script's table for Chamonix/Lisbon/Denver matches §7.7.
-8. **GraphQL.** SDL, scalars, resolvers, errors, `RankingService`, `index.ts` bootstrap with graceful shutdown (SIGINT/SIGTERM → stop scheduler, close server, close DB). DoD: integration tests; `npm run dev` then the §8.2 query returns four rankings for Lisbon and surfing NOT_APPLICABLE for Denver.
-9. **Refresher and retention.** `refreshScheduler.ts`, prune, start-up run, `REFRESH_ENABLED`. DoD: fake-timer test shows one refresh per non-fresh (location, source) and pruning keeps the newest row.
-10. **README and polish.** Write §12; run the real server for Chamonix, Lisbon, Denver, Sydney and `Springfield` with `countryCode`; confirm §7.7; confirm `git clone && npm i && npm run dev` needs no other tooling. Optional: a ten-line `Dockerfile` on `node:24-alpine`.
-
-One small, reviewable commit per step. Do not start step N+1 until step N's tests pass.
+Superseded on 2026-09-12 by [PHASES.md](PHASES.md), which regroups the original eleven linear steps into eight phases with a dependency graph and per-phase definitions of done (D-008). The steps are not repeated here.
 
 ---
 

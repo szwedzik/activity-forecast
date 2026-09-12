@@ -1,0 +1,17 @@
+# dependencies / build
+node_modules/
+dist/
+coverage/
+
+# runtime data (SQLite lives here)
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# local config
+.env
+.claude/settings.local.json
+
+# the company's brief is not ours to publish; it is summarised in docs/DESIGN.md
+task.pdf
