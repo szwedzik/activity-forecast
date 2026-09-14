@@ -218,8 +218,8 @@ test/unit/db/**
 **Tests.** insert / getLatest / prune keeps newest / upsertLocation updates fields and keeps the id / cacheQuery hit, miss and negative (`NULL location_id`) / touch / recentlyRequested(since) / migrations run twice without error.
 
 **DoD.**
-- [ ] tests green on `:memory:`.
-- [ ] `grep -rl "sqlite" src | grep -v adapters/db` finds nothing.
+- [x] tests green on `:memory:`.
+- [x] `grep -rl "sqlite" src | grep -v adapters/db` finds nothing.
 
 **Commit.** `feat(db): SQLite storage with migrations, location and snapshot repositories`.
 
@@ -285,7 +285,8 @@ test/integration/**
 2. SDL exactly as D§8.1. Because the domain `Activity` union equals the enum values, no mapping layer.
 3. Log upstream failures, which is where the logger finally exists: an `UpstreamError` carries the first zod issue in its message (P2) and D§6.4 asks for it to be logged. Resolvers validate input per D§8.3 (including the empty `activities` list and duplicate collapsing), call `RankingService`, map `ForecastBundle` to `ForecastMeta`; everything unexpected stays masked (Yoga's default).
 4. `createApp()` exists so integration tests call `yoga.fetch('/graphql', …)` with `:memory:` SQLite and fixture-backed fake clients: no port, no network.
-5. `index.ts` wires the real clients and the file database at `DB_PATH` (create the directory). Request plan mode for the wiring before editing.
+5. `index.ts` wires the real clients and the file database at `DB_PATH` (create the directory), and passes `appliedAt` to `openDatabase` from the clock rather than letting it default (D§4.2). Request plan mode for the wiring before editing.
+6. Two traps from P3. The SDL's `Location.id` is the GeoNames id (D§8.1, D-012), while the domain `Location.id` is our row id, so the resolver maps `id: location.geonamesId`. And `DaySummary`'s numbers are optional in the domain but non-null in the SDL; decide per field whether the resolver errors or the SDL relaxes, and log it.
 
 **Tests.** D§10 integration bullet: full shape (7 days × N activities, unique ranks, chronological `days`), Denver surfing `applicable: false`, `LOCATION_NOT_FOUND`, `UPSTREAM_UNAVAILABLE`, `BAD_USER_INPUT` for an empty city, the `activities` filter respected, `searchLocations` returns candidates.
 

@@ -69,3 +69,27 @@ What actually happened, in order. Newest at the bottom. Not polished on purpose.
 - P5 picks up logging the upstream error with its zod issue. added a line to its steps so the carry-forward has somewhere to land
 - left alone: response.ok is read outside the try in http.ts, so a Response-like object with a throwing getter would be misclassified. not reachable with real fetch, and guarding it costs more than it saves
 - not done here: nothing
+
+2026-09-14 >> Phase 3, ~1h
+- sqlite through node:sqlite, migrations tracked in schema_migrations, two repositories, a Clock. 199 tests
+- node:sqlite will not bind undefined at all, it throws. every optional column goes through an explicit null on the way in and back to undefined on the way out. found it by probing the API before writing against it, not by debugging later
+- upsert with ON CONFLICT ... RETURNING * keeps the row id and created_at while refreshing everything else, so re-resolving a place does not orphan its snapshots
+- the LEFT JOIN for a cached query hands back a row of nulls when the query was a remembered miss. typed it as nullable-everything with a guard rather than pretending id is always a number
+- prune keeps the newest row per location and source whatever its age. an old snapshot still beats none when Open-Meteo is down, so retention must not be the thing that empties the store
+- the rollback test was fake at first: the migration fails on its own first statement, so nothing partial ever existed. gave migrate() an optional migration list and fed it one that creates a table then collides, which actually proves the transaction
+- Location went in src/domain, not beside the SQL. the repository stores one, the services resolve one, the API returns one, so an adapter is the wrong home for it
+- PRAGMAs live in openDatabase, not the migration: they are connection settings, not schema. WAL is skipped for :memory: since there is no file to write beside
+- covered the file path too, not just :memory:. a temp-dir database reports journal_mode wal, and reopening it finds its own migration already applied
+- reviewer failed it on two rule breaks, both mine. the in-memory journal test could not fail (sqlite ignores the WAL pragma there either way), so the branch it was guarding was cosmetic. dropped both the branch and the test, kept the file-based one that actually proves WAL
+- and ix_locations_requested sat in the migration with nothing explaining it. D-016 now says why
+- it also stress-tested prune against a reference implementation over 800 random rows and could not break it, including the case where the newest row of a pair is itself older than the cutoff
+- caught a real trap for P5: the SDL Location.id is the GeoNames id, the domain Location.id is our row id. a resolver written as location.id would ship the wrong number. noted on the type and in P5 steps
+- dropped HOUR_MS and hoursAgo from clock.ts, no caller yet. toIsoUtc stays, its sort-order property is what the freshness SQL relies on
+- went further than noting both traps, since a comment is only a request to remember. the domain field is rowId now, so a P5 resolver reaching for location.id will not compile, and every statement binds through bindable() so undefined cannot reach the driver from anywhere. D-017
+- turns out the driver types already reject undefined at the bind site, not just at run time. bindable is what lets a repository hand over a domain object with optional fields without converting each column by hand
+- went back and probed every value type the driver accepts, since undefined turned out not to be the only one. it is uneven: undefined, booleans, symbols and oversized bigints throw, but Date, NaN and Infinity are each stored as NULL in silence, and a named parameter you forgot to supply is bound to NULL in silence too
+- that last one is the nasty one. rename a field in the params object, keep the SQL, and the column quietly goes null
+- so every statement now goes through query(db, sql). one place converts, one place refuses, and it covers positional parameters which the per-field version did not. D-018
+- checked it by breaking it on purpose: renamed timezone to timezoen and eight tests went red naming the missing parameter, instead of writing a null
+- also ran the whole spine end to end before committing, since nothing had ever been connected: fixture in, schemas, sqlite, read back out, re-validate, score. payload survives the text column byte for byte, inland stores as unavailable, lisbon wave cell measures 5.4 km offshore against the 5 the design recorded
+- not done here: nothing

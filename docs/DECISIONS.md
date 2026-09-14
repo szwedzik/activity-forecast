@@ -83,3 +83,21 @@ D-015 · 2026-09-14, P1 · the indoor travel gate is the worst single condition,
 - D§7.6 lists five (gusts, blizzard, deep cold, extreme heat, thunderstorm) under one name, travelGate, without saying what happens when two fire
 - took the worst. a blizzard with 110 km/h gusts is one bad journey between venues, not two, and multiplying would put an indoor museum day below a rained-off outdoor one
 - the band row for it assumes the same: outdoor 10 with 20 cm snow and 60 km/h gusts scores 67, which is 0.7 and not 0.7 x anything
+
+D-016 · 2026-09-14, P3 · one index beyond the D§5.1 schema, on locations(last_requested_at)
+- the refresher scans for locations asked about since a cutoff, every ten minutes, for as long as the service runs (D§6.3). without an index that is a full table scan each time
+- costs one small b-tree and a write on touch(), which happens once per request
+- the design listed only ix_snapshots_latest; this is the second index and the only addition to the schema
+
+D-017 · 2026-09-14, P3 · make both storage traps impossible rather than documented
+- the domain Location field is rowId, not id. the API exposes the GeoNames id as Location.id (D§8.1), so a resolver reaching for location.id would have published our primary key. there is now no such field, so it does not compile
+- node:sqlite refuses undefined twice over: its own types reject it at the bind site, and forced past those it throws at run time. so every statement binds through one place, which turns undefined into null once. without it a repository could not pass a domain object with optional fields at all without hand-converting each one
+- both were review findings that a comment would have left live. a comment is a request to remember; a compile error and a single bind path are not
+- superseded in part by D-018, which widened that single bind path to cover the rest of the driver's edges
+
+D-018 · 2026-09-14, P3 · every statement binds through one wrapper that normalises values first
+- probed the driver instead of assuming. its handling is uneven: undefined, booleans, symbols and oversized bigints throw, but a Date, a NaN and an Infinity are each written as NULL without a word, and a named parameter the params object forgot is bound to NULL silently too
+- the loud ones are fine. the silent ones are data loss found weeks later, in a nullable column, indistinguishable from a real absence
+- so query(db, sql) wraps prepare. undefined and null become NULL; booleans become 0 and 1; a Date becomes the ISO string we store anyway; NaN, Infinity, objects, arrays and symbols throw with the parameter name in the message; and a params object missing a name the SQL asks for is refused outright
+- it covers positional parameters as well, which the per-field approach did not
+- checked it by renaming one field to a typo: eight tests went red naming the missing parameter, where before it would have written a NULL
