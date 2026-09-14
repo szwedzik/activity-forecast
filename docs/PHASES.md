@@ -151,9 +151,9 @@ test/unit/domain/**
 **Tests.** D§10 bullets 1–3; the D§7.7 band table, one test per row asserting the band and never the reference number; the D§7.7 invariants.
 
 **DoD.**
-- [ ] D§10 bullets 1–3 implemented and green; every row of the D§7.7 band table is a test.
-- [ ] `npm run score-fixture -- chamonix`, `lisbon`, `denver` print tables; they are in WORKLOG.md with a line on anything that looked off.
-- [ ] `grep -rn "services/\|adapters/\|Date.now\|new Date()" src/domain` finds nothing.
+- [x] D§10 bullets 1–3 implemented and green; every row of the D§7.7 band table is a test.
+- [x] `npm run score-fixture -- chamonix`, `lisbon`, `denver` print tables; they are in WORKLOG.md with a line on anything that looked off.
+- [x] `grep -rn "services/\|adapters/\|Date.now\|new Date()" src/domain` finds nothing.
 
 **Stop-and-ask.** If a band test fails, the fix is either the curve or the band; say which and why in DECISIONS.md. Never move a curve to make a fixture look better.
 

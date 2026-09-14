@@ -33,3 +33,24 @@ What actually happened, in order. Newest at the bottom. Not polished on purpose.
 - built and ran it too, not just the check: tsc to dist, `npm start` prints the placeholder line. --env-file-if-exists says "not found, continuing", which is what it should do
 - reviewer drove the guard with 24 command shapes including `npm install > /dev/null zod`, still blocked. it also caught two deviations I'd written here but not in decisions (D-013) and that the fixture readme had no base urls in it
 - P2: the query params live in the capture script. move them into the client or the fixtures drift from what we actually send
+
+2026-09-14 >> Phase 1, ~2h
+- pure domain: feature extraction, curve, engine, four activity tables, score-fixture script. 121 tests
+- every band row in D§7.7 passed first run, so the reference scores worked out on paper in the planning session hold against the code
+- the Criterion type in D§7.2 could not express two of surfing own criteria (period falls back swell -> wave, cleanliness is a ratio). widened it to a selector, D-014
+- window is half-open: 09:00-16:00 means the seven rows 09..15. chamonix ski day = 7 rows, touring day = 9
+- chamonix 16 sep: daily code says Thunderstorm, outdoor still scores 48. storm lands at 18:00, just outside the touring window. the window doing its job but the summary row and the score will look like they disagree
+- lisbon 0.5-0.7 m days come out FAIR 45-51, GOOD once the period gets to 6.8 s. the original 10 sep expectation (0.6 m / 7 s around FAIR) holds now that the flat gate is softened
+- denver indoor tops out on 19 sep, the only day with 5 h of rain. chamonix the same on the wet day
+- outdoor saturates in fine weather: lisbon has three 100s and nothing below 94. not wrong by the bands, but the ranking is then decided by rounding. leaving it, noting it
+- D-011 says 19 hand-built cases, the table has 18 rows. wrote tests for all 18 plus a few more (missing snow depth, period fallback, caller-supplied surf note)
+- score-fixture, best day per activity (npm run score-fixture -- <city> for the full seven):
+
+      chamonix  ski  UNSUITABLE 0 all week   surf n/a   out 14 sep 100   in  16 sep 78
+      lisbon    ski  UNSUITABLE 0 all week   surf 19 sep 79 GOOD   out 15 sep 100   in  14 sep 58
+      denver    ski  UNSUITABLE 0 all week   surf n/a   out 20 sep  99   in  19 sep 82
+
+- reviewer recomputed four reference scores by hand off the shipped tables and they match. found five things: travel gate reading undocumented (D-015), D-014 missing two smaller type changes (added), indoor washout band built from a typed-in 20 instead of the real scored day (fixed, the two rows share one fixture now)
+- P4 must pass the town name into the surf note. the domain default says "no wave-model coverage nearby", D§7.4 wants "near {name}", and the domain has no business knowing the name
+- smoke.test.ts stays. PHASES said P1 would replace it, but since D-013 it asserts node:sqlite exists, which nothing else does and P3 depends on
+- not done here: nothing

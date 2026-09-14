@@ -72,3 +72,14 @@ D-013 · 2026-09-14, P0 · three small deviations while scaffolding
 - the smoke test asserts the runtime has node:sqlite rather than something trivial: PHASES said trivial, AGENTS says a test that cannot fail gets deleted, and the second rule wins
 - capture-fixtures refuses to overwrite without --force, because tests pin the dates inside the captured files
 - none of these touch the design; they are tooling, and the plan is unchanged
+
+D-014 · 2026-09-14, P1 · a criterion reads its feature through a selector, not a field name
+- D§7.2 declared `feature: keyof DayFeatures`, which cannot express two of surfing's own criteria: period falls back from swell to the whole sea state, and cleanliness is wind-wave height over wave height
+- changed to `select: (features) => number | undefined`. The three other activities pass a one-line field read and look the same as before
+- the alternative was storing both derived values on DayFeatures, which puts scoring policy into the extraction layer
+- two smaller departures from the same type sketch: GateResult gained confidenceDelta, which is how the skiing snow-depth gate says -0.2 (D§7.3); and ActivityRules.applicable was dropped, because whether surfing can be judged at all is a property of the week, not of one day, so it lives in rankActivity
+
+D-015 · 2026-09-14, P1 · the indoor travel gate is the worst single condition, not the product of all of them
+- D§7.6 lists five (gusts, blizzard, deep cold, extreme heat, thunderstorm) under one name, travelGate, without saying what happens when two fire
+- took the worst. a blizzard with 110 km/h gusts is one bad journey between venues, not two, and multiplying would put an indoor museum day below a rained-off outdoor one
+- the band row for it assumes the same: outdoor 10 with 20 cm snow and 60 km/h gusts scores 67, which is 0.7 and not 0.7 x anything
