@@ -187,8 +187,8 @@ test/unit/adapters/**
 **Tests.** D§10 adapters bullet: every fixture parses, including the all-null marine ones; absent `results` → `[]`; 500 → one retry then `UpstreamError`; 400 → no retry; timeout → retryable error; `countryCode` appears in the query; a type-level check that the schema output is assignable to `WeatherPayload` / `MarinePayload`.
 
 **DoD.**
-- [ ] tests green with an injected fake `fetch` only.
-- [ ] no `axios`, no date library (D§3).
+- [x] tests green with an injected fake `fetch` only.
+- [x] no `axios`, no date library (D§3).
 
 **Commit.** `feat(adapters): Open-Meteo geocoding, forecast and marine clients with validation and retry`.
 
@@ -283,7 +283,7 @@ test/integration/**
 **Steps.**
 1. `config.ts` first; `.env.example` lists every D§9 variable.
 2. SDL exactly as D§8.1. Because the domain `Activity` union equals the enum values, no mapping layer.
-3. Resolvers validate input per D§8.3 (including the empty `activities` list and duplicate collapsing), call `RankingService`, map `ForecastBundle` to `ForecastMeta`; everything unexpected stays masked (Yoga's default).
+3. Log upstream failures, which is where the logger finally exists: an `UpstreamError` carries the first zod issue in its message (P2) and D§6.4 asks for it to be logged. Resolvers validate input per D§8.3 (including the empty `activities` list and duplicate collapsing), call `RankingService`, map `ForecastBundle` to `ForecastMeta`; everything unexpected stays masked (Yoga's default).
 4. `createApp()` exists so integration tests call `yoga.fetch('/graphql', …)` with `:memory:` SQLite and fixture-backed fake clients: no port, no network.
 5. `index.ts` wires the real clients and the file database at `DB_PATH` (create the directory). Request plan mode for the wiring before editing.
 

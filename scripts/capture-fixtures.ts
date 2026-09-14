@@ -6,10 +6,27 @@
  *   npm run capture-fixtures -- --force re-captures; tests pin the captured dates,
  *                                       so expect to fix them up afterwards
  *
- * Endpoints, parameters and units are D§2 of docs/DESIGN.md.
+ * URLs come from the clients in src/adapters/openMeteo, so what the fixtures were
+ * recorded against and what the running service asks for cannot drift apart. The bodies
+ * are written exactly as they arrive, without going through the schemas: a fixture is
+ * meant to be what Open-Meteo said, not what we were willing to accept.
  */
 import { mkdir, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+
+import {
+  buildForecastUrl,
+  FORECAST_DAILY_VARIABLES,
+  FORECAST_DAYS,
+  FORECAST_HOURLY_VARIABLES,
+} from '../src/adapters/openMeteo/forecastClient.js';
+import { buildGeocodingUrl } from '../src/adapters/openMeteo/geocodingClient.js';
+import {
+  buildMarineUrl,
+  MARINE_DAILY_VARIABLES,
+  MARINE_HOURLY_VARIABLES,
+} from '../src/adapters/openMeteo/marineClient.js';
+import { DEFAULT_USER_AGENT } from '../src/adapters/openMeteo/http.js';
 
 const FIXTURE_DIR = path.join(process.cwd(), 'test', 'fixtures', 'open-meteo');
 const README_PATH = path.join(process.cwd(), 'test', 'fixtures', 'README.md');
@@ -18,18 +35,6 @@ const GEOCODING_URL = 'https://geocoding-api.open-meteo.com/v1/search';
 const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast';
 const MARINE_URL = 'https://marine-api.open-meteo.com/v1/marine';
 
-const FORECAST_DAYS = 8;
-
-// D§2.2 and D§2.3, verbatim. Phase 2 moves these into the Open-Meteo clients; this
-// script should then import them, so captured fixtures and live requests cannot drift.
-const WEATHER_HOURLY =
-  'temperature_2m,apparent_temperature,precipitation,precipitation_probability,snowfall,snow_depth,weather_code,cloud_cover,visibility,wind_speed_10m,wind_gusts_10m,is_day';
-const WEATHER_DAILY =
-  'sunrise,sunset,sunshine_duration,daylight_duration,uv_index_max,weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,precipitation_sum,rain_sum,snowfall_sum,precipitation_hours,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,cloud_cover_mean';
-const MARINE_HOURLY =
-  'wave_height,wave_direction,wave_period,wind_wave_height,wind_wave_period,swell_wave_height,swell_wave_period,swell_wave_direction,sea_surface_temperature';
-const MARINE_DAILY = 'wave_height_max,wave_period_max,swell_wave_height_max,swell_wave_period_max';
-
 interface GeocodingResult {
   readonly id: number;
   readonly name: string;
@@ -37,7 +42,6 @@ interface GeocodingResult {
   readonly longitude: number;
   readonly timezone: string;
   readonly country_code?: string;
-  readonly admin1?: string;
 }
 
 interface GeocodingResponse {
@@ -62,33 +66,13 @@ const TOWNS = ['Chamonix', 'Lisbon', 'Denver'] as const;
 const AMBIGUOUS = 'Springfield';
 const NO_MATCH = 'zzqqxwv-not-a-place';
 
-const log = (message: string): void => void process.stdout.write(`${message}\n`);
+const log = (message = ''): void => void process.stdout.write(`${message}\n`);
 const slug = (name: string): string => name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-function geocodingQuery(name: string, count: number): string {
-  return `${GEOCODING_URL}?name=${encodeURIComponent(name)}&count=${count}&language=en&format=json`;
-}
-
-function forecastQuery(place: GeocodingResult): string {
-  return (
-    `${FORECAST_URL}?latitude=${place.latitude}&longitude=${place.longitude}` +
-    `&timezone=${encodeURIComponent(place.timezone)}&forecast_days=${FORECAST_DAYS}` +
-    `&hourly=${WEATHER_HOURLY}&daily=${WEATHER_DAILY}`
-  );
-}
-
-function marineQuery(place: GeocodingResult): string {
-  return (
-    `${MARINE_URL}?latitude=${place.latitude}&longitude=${place.longitude}` +
-    `&timezone=${encodeURIComponent(place.timezone)}&forecast_days=${FORECAST_DAYS}` +
-    `&hourly=${MARINE_HOURLY}&daily=${MARINE_DAILY}`
-  );
-}
-
 async function get(url: string): Promise<unknown> {
   const response = await fetch(url, {
-    headers: { 'User-Agent': 'activity-forecast/1.0 (fixture capture)' },
+    headers: { 'User-Agent': `${DEFAULT_USER_AGENT} (fixture capture)` },
     signal: AbortSignal.timeout(20_000),
   });
   if (!response.ok) throw new Error(`${response.status} ${response.statusText} for ${url}`);
@@ -181,13 +165,14 @@ marine:    ${MARINE_URL}
 
 Both take \`latitude\`, \`longitude\`, \`forecast_days=${FORECAST_DAYS}\` and the town's IANA
 \`timezone\` passed explicitly rather than \`auto\`, so local dates line up by construction
-(D-012).
+(D-012). The lists below are the exported constants the clients use, so these fixtures and
+the running service ask for the same thing.
 
 \`\`\`
-forecast hourly: ${WEATHER_HOURLY}
-forecast daily:  ${WEATHER_DAILY}
-marine hourly:   ${MARINE_HOURLY}
-marine daily:    ${MARINE_DAILY}
+forecast hourly: ${FORECAST_HOURLY_VARIABLES.join(',')}
+forecast daily:  ${FORECAST_DAILY_VARIABLES.join(',')}
+marine hourly:   ${MARINE_HOURLY_VARIABLES.join(',')}
+marine daily:    ${MARINE_DAILY_VARIABLES.join(',')}
 \`\`\`
 `;
 }
@@ -205,12 +190,21 @@ async function main(): Promise<void> {
 
   for (const town of TOWNS) {
     log(`${town}:`);
-    const geocoding = await capture(`geocoding.${slug(town)}.json`, geocodingQuery(town, 5));
+    const geocoding = await capture(
+      `geocoding.${slug(town)}.json`,
+      buildGeocodingUrl(GEOCODING_URL, town, { count: 5 }),
+    );
     const place = topResult(geocoding, town);
     log(`  top hit: ${place.name}, ${place.country_code ?? '??'} at ${place.latitude}, ${place.longitude} (${place.timezone})`);
 
-    const forecast = await capture(`forecast.${slug(town)}.json`, forecastQuery(place));
-    const marine = await capture(`marine.${slug(town)}.json`, marineQuery(place));
+    const forecast = await capture(
+      `forecast.${slug(town)}.json`,
+      buildForecastUrl(FORECAST_URL, place.latitude, place.longitude, place.timezone),
+    );
+    const marine = await capture(
+      `marine.${slug(town)}.json`,
+      buildMarineUrl(MARINE_URL, place.latitude, place.longitude, place.timezone),
+    );
 
     rows.push({
       town,
@@ -221,10 +215,16 @@ async function main(): Promise<void> {
   }
 
   log(`${AMBIGUOUS} (ambiguous name):`);
-  await capture(`geocoding.${slug(AMBIGUOUS)}.json`, geocodingQuery(AMBIGUOUS, 10));
+  await capture(
+    `geocoding.${slug(AMBIGUOUS)}.json`,
+    buildGeocodingUrl(GEOCODING_URL, AMBIGUOUS, { count: 10 }),
+  );
 
   log('no-match query:');
-  const noMatch = await capture('geocoding.nomatch.json', geocodingQuery(NO_MATCH, 5));
+  const noMatch = await capture(
+    'geocoding.nomatch.json',
+    buildGeocodingUrl(GEOCODING_URL, NO_MATCH, { count: 5 }),
+  );
   const noMatchHasResults = 'results' in (noMatch as Record<string, unknown>);
 
   await writeFile(README_PATH, readme(capturedAt, rows, noMatchHasResults), 'utf8');

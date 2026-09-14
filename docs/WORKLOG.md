@@ -54,3 +54,18 @@ What actually happened, in order. Newest at the bottom. Not polished on purpose.
 - P4 must pass the town name into the surf note. the domain default says "no wave-model coverage nearby", D§7.4 wants "near {name}", and the domain has no business knowing the name
 - smoke.test.ts stays. PHASES said P1 would replace it, but since D-013 it asserts node:sqlite exists, which nothing else does and P3 depends on
 - not done here: nothing
+
+2026-09-14 >> Phase 2, ~1h
+- three clients, zod schemas, http wrapper with timeout and one retry, haversine. 155 tests
+- own test caught a real bug: a 200 with a body that is not JSON was being retried. retryable was only about whether to serve stale, and I was also using it as the retry rule. now not-retryable gates the retry outright
+- looseObject not object, so a variable Open-Meteo adds later survives parsing instead of being stripped on the way to storage. there is a test that adds a field and checks it comes out the other end
+- two compile-time lines in schemas.ts assert the zod output is assignable to the P1 payload types. no runtime cost, breaks the build if they drift
+- capture-fixtures now imports buildGeocodingUrl/buildForecastUrl/buildMarineUrl from the clients, so the fixtures and the live service ask for the same thing. that closes the P1 carry-forward
+- URLSearchParams percent-encodes the commas in the variable list and the slash in the timezone, which the old hand-built script did not. checked against the live API, 200 and 192 rows, so a re-capture would produce the same data
+- geocoding schema requires id/name/lat/lon/timezone and makes the rest optional. all 21 results across the fixtures have everything, but admin1 and population are not guaranteed for small places and a missing one should not fail the whole search
+- zod failures carry the first issue path in the message (hourly.visibility: ...) instead of taking a logger dependency. P5 logs it
+- reviewer found two real ones. a timeout that fires mid-body surfaces from json() as an AbortError, and I was calling that a broken payload, so it lost both the retry and the stale fallback. and a payload that keeps its keys but empties its rows parsed fine, which would have been stored and scored as seven days of nothing. both fixed, both now have tests
+- also from the review: the deadline test could not fail (the fake was not recording the signal), and the variable-list tests compared the URL against the constants that built it, so they would pass however wrong both were. now literal lists, and toContain is gone since wave_height is a substring of wave_height_max
+- P5 picks up logging the upstream error with its zod issue. added a line to its steps so the carry-forward has somewhere to land
+- left alone: response.ok is read outside the try in http.ts, so a Response-like object with a throwing getter would be misclassified. not reachable with real fetch, and guarding it costs more than it saves
+- not done here: nothing
