@@ -10,6 +10,8 @@ import { queryKey } from '../adapters/db/locationRepository.js';
 import type { GeocodingClient, GeocodingResult } from '../adapters/openMeteo/geocodingClient.js';
 import type { Location, NewLocation } from '../domain/location.js';
 import type { Clock } from './clock.js';
+import type { Logger } from './logger.js';
+import { silentLogger } from './logger.js';
 import { toIsoUtc } from './clock.js';
 import { upstreamUnavailable } from './errors.js';
 
@@ -41,6 +43,7 @@ export interface LocationServiceOptions {
   readonly repository: LocationRepository;
   readonly geocoding: GeocodingClient;
   readonly clock: Clock;
+  readonly logger?: Logger;
   readonly policy?: GeocodePolicy;
 }
 
@@ -63,6 +66,7 @@ function toNewLocation(result: GeocodingResult): NewLocation {
 
 export function createLocationService(options: LocationServiceOptions): LocationService {
   const { repository, geocoding, clock } = options;
+  const logger = options.logger ?? silentLogger;
   const policy = options.policy ?? GEOCODE_POLICY;
 
   const stillGood = (resolvedAt: string, isHit: boolean, now: Date): boolean => {
@@ -75,6 +79,7 @@ export function createLocationService(options: LocationServiceOptions): Location
     countryCode: string | undefined,
     count: number,
   ): Promise<GeocodingResult[]> => {
+    logger.info({ name, countryCode }, 'calling Open-Meteo geocoding');
     try {
       return await geocoding.search(name, { countryCode, count });
     } catch (error) {

@@ -115,6 +115,9 @@ export function createForecastService(options: ForecastServiceOptions): Forecast
 
   async function fetchAndStore(location: Location, source: SnapshotSource): Promise<Snapshot> {
     const fetchedAt = toIsoUtc(clock.now());
+    // One line per call that actually leaves the process, so "served from the store" is
+    // something anyone can verify from the log rather than take on trust.
+    logger.info({ location: location.name, source }, 'calling Open-Meteo');
 
     if (source === 'marine') {
       const payload = await marine.fetchMarine(location.latitude, location.longitude, location.timezone);
