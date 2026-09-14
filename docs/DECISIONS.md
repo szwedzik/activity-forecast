@@ -120,3 +120,24 @@ D-021 · 2026-09-14, P4 after review · which layer owns errors and logging
 - services/errors.ts owns ServiceError and its codes; P5 maps those onto GraphQLError in graphql/errors.ts rather than defining a second vocabulary
 - services/logger.ts owns the Logger interface, shaped like pino; P5 creates the pino instance in logger.ts and injects it. nothing below P5 imports pino
 - the TTL constants in freshness.ts and locationService.ts are the D§9 defaults written twice. P5 config.ts becomes the single source and passes them in; the constants stay as the defaults a caller gets when it passes nothing
+
+D-022 · 2026-09-14, P5 · six DaySummary fields relaxed from non-null to nullable
+- SDL change, so asked first. the six: weatherCode, tempMaxC, tempMinC, precipitationMm, snowfallCm, windMaxKmh
+- the domain already types them optional, and D§2.2 says any Open-Meteo value may be null for some models or regions. a schema promising more than the source guarantees is promising what it cannot keep
+- the cost of leaving it was disproportionate: every parent up the chain is non-null, so GraphQL null propagation means one missing temperature on day five nulls the whole response, rankings included
+- no null in any of the 21 captured fixture days, so this is about the rare case, not the common one
+
+D-023 · 2026-09-14, P5 · the masking policy is ours, decided on the error code, not on instanceof
+- Yoga masks anything that is not a GraphQLError, checked with instanceof. that holds only while exactly one copy of the graphql module is in play
+- under vitest it was not: our source is transformed, Yoga stays external, each side gets its own class, and every coded error came back as a masked INTERNAL_SERVER_ERROR. the same code returned the right codes under tsx
+- the failure was silent and pointed the wrong way: the test looked broken where production was fine, and the obvious next move would have been to change working source to satisfy a broken harness
+- tried resolve.dedupe (no effect) and inlining yoga (20 failures) before deciding not to fight the bundler
+- first attempt read extensions.code against an allowlist. wrong, and the reviewer proved it: graphql raises variable errors with no code at all, so "you forgot $city" came back as Unexpected error / INTERNAL_SERVER_ERROR. a caller typo reported as a server fault, and a bad limit behaving differently inline than as a variable
+- it also turned out that parse and validation errors never reach maskError: they happen before execution, so two of the six allowlist entries were inert and a test was covering a path the server never takes
+- now: pass an error whose name is GraphQLError and whose originalError, if any, is also one. that is what @envelop/core does, it is name-based so the dual-module problem cannot touch it, and it restores the default behaviour rather than reinventing it
+- and the masker logs what it hid. Yoga's own logger was off, so a masked error was recorded nowhere: HTTP 200, no message, no stack, no line anywhere
+
+D-024 · 2026-09-14, P5 · small modules the phase lists did not name
+- freshness.ts, errors.ts and logger.ts in P4, shutdown.ts in P5. same reason each time: the plan named a behaviour without naming a file, and the behaviour needed to be testable on its own
+- shutdown is the clearest case. D§4.2 puts it in index.ts, but Windows does not deliver POSIX signals, so a handler written inline there could never be exercised at all. as its own module the order is provable: stop the app, drain the server, then close the database, and a second signal does nothing
+- the signal wiring itself stays one line in index.ts and is the part still not covered

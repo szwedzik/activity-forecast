@@ -112,3 +112,45 @@ What actually happened, in order. Newest at the bottom. Not polished on purpose.
 - weather and marine now run in parallel. they were serial with a comment justifying it, but marinePart never rejects, so the justification was wrong and it was costing a round trip on every cold location
 - D-021 records which layer owns errors and logging, so P5 does not build a second vocabulary next to this one
 - not done here: nothing
+
+2026-09-14 >> Phase 5, ~2h
+- the API and the bootstrap. schema, scalars, errors, resolvers, config, pino, graceful shutdown. 331 tests, and the thing answers over HTTP for the first time
+- asked before touching the SDL, per my own rule. six DaySummary fields relaxed to nullable (D-022). the argument that decided it: every parent up the chain is non-null, so one missing temperature on day five would null the entire response, rankings included
+- lost the better part of an hour to seven integration failures where every coded error came back as INTERNAL_SERVER_ERROR. the same code returned the right codes under tsx. vitest transforms our source but leaves yoga external, so each side gets its own graphql module and yoga's instanceof check fails
+- that one pointed the wrong way: the tests looked broken where production was fine, and the obvious move would have been to change working source to satisfy a broken harness. tried dedupe (nothing) and inlining yoga (20 failures) before deciding not to fight the bundler
+- took over the masking policy instead, deciding on extensions.code against an allowlist. better regardless of the bug: the D§8.3 contract is now a list in one file, tested for what it hides as well as what it lets through. D-023
+- the DoD wanted the log to prove the second request never left the process, and nothing logged upstream calls yet, so that went in. three calls for two identical Lisbon requests: geocode, weather, marine, then nothing
+- live run matched the fixture tables exactly: lisbon surf 19 sep 79 GOOD, outdoor 15 sep 100, indoor 14 sep 58. denver surfing not applicable with the town named, marineCellDistanceKm null. lisbon reports 5.4 km offshore
+- trimmed from the live run, port 4010, database empty at start:
+
+      # activityRankings(city: "Lisbon")
+      location  {"id":"2267057","name":"Lisbon","countryCode":"PT","timezone":"Europe/Lisbon"}
+      forecast  {"source":"open-meteo","stale":false,"marineAvailable":true,
+                 "marineCellDistanceKm":5.4,"weatherFetchedAt":"2026-09-14T19:33:27.746Z"}
+      SKIING               2026-09-14   0 UNSUITABLE  snowCover 0 cm snow depth
+      SURFING              2026-09-19  79 GOOD        waveHeight 0.7 m mean wave height
+      OUTDOOR_SIGHTSEEING  2026-09-15 100 EXCELLENT   wind 16 km/h mean wind
+      INDOOR_SIGHTSEEING   2026-09-14  58 FAIR        outdoorConditions outdoor score 94
+
+      # activityRankings(city: "Denver")
+      marineAvailable false, marineCellDistanceKm null
+      SURFING not applicable, all 7 days NOT_APPLICABLE and score 0
+      "No wave-model coverage near Denver; Open-Meteo's marine grid returns no data
+       for inland locations."
+
+      # two identical Lisbon requests, upstream calls logged
+      1. calling Open-Meteo geocoding {"name":"Lisbon"}
+      2. calling Open-Meteo {"location":"Lisbon","source":"weather"}
+      3. calling Open-Meteo {"location":"Lisbon","source":"marine"}
+      (nothing further: the second request never left the process)
+
+- ctrl-c could not be tested on windows at all, which does not deliver POSIX signals. pulled the sequence into shutdown.ts so the order is provable: app, drain the server, then close the db, and a second signal does nothing. the signal wiring itself is one line I have not exercised automatically
+- reviewer failed it on a regression I introduced with the masking fix. graphql raises variable errors with no code at all, so the allowlist turned "you forgot $city" into Unexpected error / INTERNAL_SERVER_ERROR. a caller typo reported as a server fault, and a bad limit behaving differently inline than as a variable
+- it also found that parse and validation errors never reach maskError at all, so two of my six allowlist entries were inert and one test was covering a path the server never takes
+- replaced the allowlist with the name check @envelop uses: GraphQLError whose originalError, if any, is also one. immune to the dual-module problem and it restores the default instead of reinventing it. D-023 rewritten
+- and Yoga own logger was off, so a masked error was logged nowhere. HTTP 200, no message, no stack, nothing. the masker takes a logger now
+- my masking test was not testing masking: the location service wraps anything the geocoder throws into a coded error, so nothing unexpected could ever escape it. rewrote it around a timezone the runtime cannot resolve, which is genuinely unhandled
+- D-022 had no test proving what it bought either. added one with a null daily value, then checked it is not vacuous by restoring the non-null schema: red, then green again
+- also from the review: dropped the vitest dedupe entry whose comment claimed a fix D-023 records as not working, and tightened the name check so control characters no longer count as a place name
+- left alone: a masked error loses path and locations. harmless to a client and the detail is in the log now
+- not done here: nothing

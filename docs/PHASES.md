@@ -291,10 +291,10 @@ test/integration/**
 **Tests.** D§10 integration bullet: full shape (7 days × N activities, unique ranks, chronological `days`), Denver surfing `applicable: false`, `LOCATION_NOT_FOUND`, `UPSTREAM_UNAVAILABLE`, `BAD_USER_INPUT` for an empty city, the `activities` filter respected, `searchLocations` returns candidates.
 
 **DoD.**
-- [ ] `npm run dev`, then the D§8.2 query for Lisbon returns four rankings; Denver returns surfing `NOT_APPLICABLE`.
-- [ ] a second identical request is served from SQLite (the log shows no upstream call).
-- [ ] Ctrl-C exits cleanly.
-- [ ] WORKLOG entry with trimmed real responses.
+- [x] `npm run dev`, then the D§8.2 query for Lisbon returns four rankings; Denver returns surfing `NOT_APPLICABLE`.
+- [x] a second identical request is served from SQLite (the log shows no upstream call).
+- [x] Ctrl-C exits cleanly — *partly*: the sequence (stop the app, drain the server, close the db) and its idempotence are unit-tested in `test/unit/shutdown.test.ts`, but Windows does not deliver POSIX signals, so the `process.on` wiring itself was not exercised automatically (P5 worklog).
+- [x] WORKLOG entry with trimmed real responses.
 
 **Commits.** `feat(api): GraphQL schema, resolvers and error codes` · `feat: application bootstrap with config, logging and graceful shutdown`.
 

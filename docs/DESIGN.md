@@ -498,17 +498,18 @@ type ForecastMeta {
   timezone: String!
 }
 
+"""Every measurement is nullable *(2026-09-14, D-022)*: Open-Meteo may omit any value, and one gap should cost that value rather than the whole response."""
 type DaySummary {
   date: Date!
-  weatherCode: Int!
+  weatherCode: Int
   "Human summary of the WMO code, e.g. \"Light rain\"."
   summary: String!
-  tempMaxC: Float!
-  tempMinC: Float!
-  precipitationMm: Float!
+  tempMaxC: Float
+  tempMinC: Float
+  precipitationMm: Float
   precipitationProbabilityMax: Int
-  snowfallCm: Float!
-  windMaxKmh: Float!
+  snowfallCm: Float
+  windMaxKmh: Float
   sunshineHours: Float
   waveHeightMaxM: Float
 }
