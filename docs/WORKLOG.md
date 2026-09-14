@@ -154,3 +154,32 @@ What actually happened, in order. Newest at the bottom. Not polished on purpose.
 - also from the review: dropped the vitest dedupe entry whose comment claimed a fix D-023 records as not working, and tightened the name check so control characters no longer count as a place name
 - left alone: a masked error loses path and locations. harmless to a client and the detail is in the log now
 - not done here: nothing
+
+2026-09-14 >> Phase 6, ~1h
+- the background refresher and retention. 365 tests. this is the last piece of D§6 and the smallest
+- split runCycle() out as public so the work is testable without timers. which calls a cycle makes has nothing to do with clocks, and threading fake timers through it would only make it harder to read. four small timer tests cover the rest
+- the one that would have been easy to get wrong: a marine source sitting at unavailable has to be skipped, not refreshed. treat it as "not fresh" and every cycle re-asks Open-Meteo whether Denver has a coastline, forever. the weekly recheck still happens because classify already turns it back to expired at 168h
+- watched it in the real process rather than trusting the unit tests. with a 7-second weather TTL: cycles 1 and 2 skip, cycle 3 refreshes weather once it ages, cycle 4 skips again, marine never refetched because its TTL had not passed
+- and with normal TTLs, five cycles in a row found Lisbon active, both sources fresh, and spent nothing. three upstream calls in total, all from the original request
+- a cycle that throws mid-location is caught per location, so one town with a timezone the runtime cannot resolve does not take the rest of the cycle with it
+- stop() awaits a cycle in flight before returning, because shutdown closes the database next and a cycle is mid-way through writing snapshots
+- createApp builds the scheduler but does not start it. index.ts starts it once the server is listening, so a test never gets a timer it did not ask for
+- the recording test logger now keeps every level in order, since the DoD wanted the cycle's info line asserted
+- reviewer failed it, and on the worst kind of finding: not a wrong answer but a process that will not exit. stop() re-awaited the promise runGuarded already settles, so a cycle that rejected made stop() reject. shutdown.ts had no guard of its own and index.ts calls void shutdown(), so the server stayed bound, the db stayed open, exit(0) never ran, and the second ctrl-c was already swallowed by the stopping flag
+- fixed in both places rather than the cheaper one. the scheduler tracks the cycle and swallows its failure when stopping; every teardown step is wrapped so a step that throws is logged and the rest still runs. D-026, and three tests that kill the process if either guard goes
+- four of my behaviours had no test that could fail: the overlap guard, stop() actually awaiting, both unref() calls, and the whole app wiring. deleted each one to watch the suite stay green, then wrote the test that goes red. moving start() into createApp broke nothing at all before
+- the 48-hour window and the pause between calls were only asserted indirectly, so pruning everything except the newest row would have passed every test in the file. both pinned with their numbers now
+- D-025 for skipping unavailable. it was in this log and nowhere else, and it is a deviation from D§6.3's literal "every source that is not fresh", which my own rules say belongs in DECISIONS
+- ran the real process once more for the one line no test reaches, index.ts starting the thing. fifteen-second cycles, seven-second TTLs, eighteen-second retention:
+
+      # a cycle at start-up before anyone has asked about anywhere
+      refresh cycle {"locations":0,"refreshed":0,"skipped":0,"failed":0,"pruned":0}
+      # one request for Lisbon, then the next two cycles
+      refresh cycle {"locations":1,"refreshed":2,"skipped":0,"failed":0,"pruned":0}
+      refresh cycle {"locations":1,"refreshed":2,"skipped":0,"failed":0,"pruned":2}
+
+- graceful shutdown still cannot be seen on windows: SIGTERM to a child is TerminateProcess, so the handler never runs. the sequence is covered by six unit tests and nothing more
+- a comment in config.ts claimed the refresher is off in tests. it is on by default and simply never started, which is not the same thing
+- passed on the second pass, and it mutation-tested eleven behaviours itself rather than taking my word for any of them. it also walked the shutdown path looking for a remaining way to leave the process alive and did not find one
+- one thing it left me: runCycle() is tracked but not guarded, so two concurrent calls would overwrite each other and stop() would wait on the second. nothing calls it but a test, so it is commented rather than changed
+- not done here: no watchdog around the server drain. on this node close() calls back immediately when the keep-alive sockets are idle, so only a request that never ends could park a shutdown. a README line in P7 rather than code now

@@ -64,20 +64,35 @@ export function geocodingResultFor(location: NewLocation): GeocodingResult {
   };
 }
 
+export interface LogRecord {
+  readonly level: 'info' | 'warn' | 'error';
+  readonly fields: Record<string, unknown>;
+  readonly message: string;
+}
+
 export interface RecordingLogger extends Logger {
-  readonly warnings: { fields: Record<string, unknown>; message: string }[];
-  readonly errors: { fields: Record<string, unknown>; message: string }[];
+  /** Everything, in order. */
+  readonly records: LogRecord[];
+  readonly warnings: LogRecord[];
+  readonly errors: LogRecord[];
 }
 
 export function recordingLogger(): RecordingLogger {
-  const warnings: RecordingLogger['warnings'] = [];
-  const errors: RecordingLogger['errors'] = [];
+  const records: LogRecord[] = [];
+  const at = (level: LogRecord['level']) => (fields: Record<string, unknown>, message: string) =>
+    void records.push({ level, fields, message });
+
   return {
-    warnings,
-    errors,
-    info: () => undefined,
-    warn: (fields, message) => void warnings.push({ fields, message }),
-    error: (fields, message) => void errors.push({ fields, message }),
+    records,
+    get warnings() {
+      return records.filter((one) => one.level === 'warn');
+    },
+    get errors() {
+      return records.filter((one) => one.level === 'error');
+    },
+    info: at('info'),
+    warn: at('warn'),
+    error: at('error'),
   };
 }
 

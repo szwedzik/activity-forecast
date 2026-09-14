@@ -313,8 +313,8 @@ test/integration/**
 **Tests.** Fake timers: one refresh per non-fresh (location, source) and none for fresh ones; prune keeps the newest row; a failing refresh does not stop the cycle; `stop()` is safe to call twice.
 
 **DoD.**
-- [ ] tests green.
-- [ ] one log line per cycle with counts (refreshed, skipped, pruned).
+- [x] tests green.
+- [x] one log line per cycle with counts (refreshed, skipped, pruned).
 
 **Commit.** `feat(services): background refresh of active locations and snapshot retention`.
 
@@ -332,7 +332,7 @@ test/integration/**
 3. `/code-review` on the whole tree, then `/simplify`, then `/security-review`. Fix what is real; log what is skipped and why.
 4. Fresh-clone test in a temporary directory: `git clone … && npm ci && npm run check && npm run dev`.
 5. Final WORKLOG entry: what was cut and why; what I would do next (D§12 item 6).
-6. Optional: `Dockerfile` on `node:24-alpine` (`npm ci --ignore-scripts`, `npm run build`, `CMD ["node", "dist/index.js"]`).
+6. `Dockerfile` on `node:24-alpine` (`npm ci --ignore-scripts`, `npm run build`, `CMD ["node", "dist/index.js"]`).
 7. Push, confirm CI is green, make the repo public, send the "finished" note.
 
 **DoD.**

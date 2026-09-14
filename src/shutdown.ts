@@ -28,6 +28,15 @@ export interface ShutdownOptions {
 
 export function createShutdown(options: ShutdownOptions): (signal: string) => Promise<void> {
   const { app, server, db, logger } = options;
+
+  /** One step of the teardown. A step that fails is reported, not fatal. */
+  const attempt = async (what: string, step: () => Promise<unknown>): Promise<void> => {
+    try {
+      await step();
+    } catch (error) {
+      logger.error({ step: what, error: String(error) }, 'shutdown step failed; continuing');
+    }
+  };
   const exit = options.exit ?? ((code: number) => process.exit(code));
   let stopping = false;
 
@@ -39,9 +48,14 @@ export function createShutdown(options: ShutdownOptions): (signal: string) => Pr
 
     // Order matters: stop the app's own work, stop accepting requests and let the ones
     // in flight drain, and only then take the database away from them.
-    await app.close();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-    db.close();
+    //
+    // Each step is guarded, because a shutdown that gives up half way is worse than any
+    // of the failures it might hit: the port stays bound, the database stays open, and
+    // the process never exits, with a second Ctrl-C already swallowed by the guard above
+    // (D-026).
+    await attempt('stopping background work', () => app.close());
+    await attempt('closing the server', () => new Promise<void>((resolve) => server.close(() => resolve())));
+    await attempt('closing the database', async () => db.close());
 
     logger.info({ signal }, 'stopped');
     exit(0);

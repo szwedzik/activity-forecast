@@ -28,7 +28,8 @@ const schema = z.object({
   GEOCODE_TTL_DAYS: z.coerce.number().positive().default(30),
   GEOCODE_MISS_TTL_HOURS: hours(24),
 
-  // Off in tests, so a suite never schedules work it did not ask for (D§6.3).
+  // On by default, but nothing schedules a timer until the bootstrap calls `start()`,
+  // so a suite never gets work it did not ask for (D§6.3).
   REFRESH_ENABLED: z
     .enum(['true', 'false'])
     .default('true')

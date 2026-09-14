@@ -55,6 +55,43 @@ describe('shutting down', () => {
     expect(h.db.close).toHaveBeenCalledOnce();
   });
 
+  it('closes the server and the database even when stopping the app fails', async () => {
+    // The failure that hangs a process: a rejected app.close() used to skip everything
+    // after it, leaving the port bound and the database open, with the second Ctrl-C
+    // already swallowed by the guard (D-026).
+    const h = harness();
+    h.app.close.mockRejectedValue(new Error('a cycle blew up'));
+
+    await h.shutdown('SIGINT');
+
+    expect(h.server.close).toHaveBeenCalledOnce();
+    expect(h.db.close).toHaveBeenCalledOnce();
+    expect(h.exit).toHaveBeenCalledWith(0);
+  });
+
+  it('closes the database even when the server refuses to close', async () => {
+    const h = harness();
+    h.server.close.mockImplementation(() => {
+      throw new Error('server already gone');
+    });
+
+    await h.shutdown('SIGTERM');
+
+    expect(h.db.close).toHaveBeenCalledOnce();
+    expect(h.exit).toHaveBeenCalledWith(0);
+  });
+
+  it('still exits when the database itself will not close', async () => {
+    const h = harness();
+    h.db.close.mockImplementation(() => {
+      throw new Error('locked');
+    });
+
+    await h.shutdown('SIGINT');
+
+    expect(h.exit).toHaveBeenCalledWith(0);
+  });
+
   it('ignores a second signal rather than tearing down twice', async () => {
     const h = harness();
 

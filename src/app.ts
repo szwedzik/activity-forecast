@@ -27,6 +27,8 @@ import type { Logger } from './services/logger.js';
 import { silentLogger } from './services/logger.js';
 import type { RankingService } from './services/rankingService.js';
 import { createRankingService } from './services/rankingService.js';
+import type { RefreshScheduler } from './services/refreshScheduler.js';
+import { createRefreshScheduler } from './services/refreshScheduler.js';
 
 export interface Clients {
   readonly geocoding: GeocodingClient;
@@ -68,6 +70,11 @@ export interface App {
     readonly forecasts: ForecastService;
     readonly ranking: RankingService;
   };
+  /**
+   * Built but not started: the bootstrap decides when, so a test that never asks for a
+   * timer never gets one (D§6.3).
+   */
+  readonly refresher: RefreshScheduler;
   /** Stops anything the app started. The database belongs to whoever opened it. */
   close(): Promise<void>;
 }
@@ -96,10 +103,22 @@ export function createApp(options: AppOptions): App {
 
   const ranking = createRankingService({ locations, forecasts, clock });
 
+  const refresher = createRefreshScheduler({
+    locations: createLocationRepository(db),
+    snapshots: createSnapshotRepository(db),
+    forecasts,
+    clock,
+    logger,
+    enabled: config.refresh.enabled,
+    intervalMs: config.refresh.intervalMs,
+    activeWindowMs: config.refresh.activeWindowMs,
+    retentionMs: config.snapshotRetentionMs,
+  });
+
   return {
     yoga: buildYoga({ ranking, locations }, logger),
     services: { locations, forecasts, ranking },
-    // Phase 6's refresher is the first thing that will need stopping here.
-    close: async () => undefined,
+    refresher,
+    close: () => refresher.stop(),
   };
 }

@@ -49,6 +49,8 @@ const app = createApp({
 const server = createServer(app.yoga);
 
 server.listen(config.port, () => {
+  // Only once we are actually serving: nothing to keep warm before that.
+  app.refresher.start();
   logger.info(
     { port: config.port, dbPath: config.dbPath, refreshEnabled: config.refresh.enabled },
     `activity-forecast listening on http://localhost:${config.port}/graphql`,

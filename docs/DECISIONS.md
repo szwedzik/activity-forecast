@@ -141,3 +141,15 @@ D-024 · 2026-09-14, P5 · small modules the phase lists did not name
 - freshness.ts, errors.ts and logger.ts in P4, shutdown.ts in P5. same reason each time: the plan named a behaviour without naming a file, and the behaviour needed to be testable on its own
 - shutdown is the clearest case. D§4.2 puts it in index.ts, but Windows does not deliver POSIX signals, so a handler written inline there could never be exercised at all. as its own module the order is provable: stop the app, drain the server, then close the database, and a second signal does nothing
 - the signal wiring itself stays one line in index.ts and is the part still not covered
+
+D-025 · 2026-09-14, P6 · the cycle skips unavailable, not only fresh
+- D§6.3 says refresh every source that is not fresh. read literally that includes unavailable, which is the state a landlocked town's marine source sits in
+- so the cycle would ask Open-Meteo every ten minutes whether Denver has grown a coastline, for every inland town anyone has ever looked up. the opposite of what negative caching was for
+- unavailable is a stored answer with its own week-long TTL (D§6.1). it ages out on its own and the background cycle has nothing to add
+- cost: a town that genuinely gains coverage waits up to a week for the cycle to notice. the request path already behaved this way, so this does not make anything worse, it just declines to make it better
+
+D-026 · 2026-09-14, P6 after review · a failed cycle must not be able to stop a shutdown
+- reviewer found it. stop() awaited the same promise runGuarded already handles, so a cycle that rejected made stop() reject
+- and from there: shutdown.ts had no guard of its own, index.ts calls void shutdown(signal), so the server stayed bound, the database stayed open, exit(0) was never reached, and the second ctrl-C was already swallowed by the stopping flag. a hang rather than a crash, which is the worse of the two to diagnose
+- fixed in both places. the scheduler tracks the cycle and swallows its failure when stopping; every step of the teardown is wrapped so a step that throws is logged and the remaining steps still run
+- one of the two would have closed this bug. both, because the teardown should not depend on the manners of whatever it is closing
