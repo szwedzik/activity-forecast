@@ -66,3 +66,9 @@ D-012 · 2026-09-12, evening · gap sweep before the first commit
 - 429 from Open-Meteo: not retried, but retryable, so stale data is served; User-Agent is a constant (D§6.4)
 - no dotenv: `npm start` uses Node's --env-file-if-exists; .npmrc engine-strict; .gitattributes forces LF; CI runs Node 22 and 24 (D§9, P0)
 - query key is NFC-normalised (D§5.1)
+
+D-013 · 2026-09-14, P0 · three small deviations while scaffolding
+- guard.mjs read shell redirections as package names, so a bare `npm install 2>&1` was blocked; it strips them before counting now, and `npm install zod` is still refused
+- the smoke test asserts the runtime has node:sqlite rather than something trivial: PHASES said trivial, AGENTS says a test that cannot fail gets deleted, and the second rule wins
+- capture-fixtures refuses to overwrite without --force, because tests pin the dates inside the captured files
+- none of these touch the design; they are tooling, and the plan is unchanged

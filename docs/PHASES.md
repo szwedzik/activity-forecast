@@ -112,10 +112,10 @@ test/fixtures/open-meteo/*.json       + test/fixtures/README.md
 **Tests.** `smoke.test.ts` asserts something trivial; P1 replaces it.
 
 **DoD.**
-- [ ] `npm run check` green after a clean `npm ci`.
-- [ ] a commit with a failing test is rejected by the pre-commit hook (try once, revert).
-- [ ] fixtures: 5 geocoding, 3 forecast, 3 marine files; README records date, first daily date per fixture, and the all-null marine files.
-- [ ] CI workflow present with the Node 22 and 24 matrix (its first green run is confirmed in P7 after the push).
+- [x] `npm run check` green after a clean `npm ci`.
+- [x] a commit with a failing test is rejected by the pre-commit hook (try once, revert).
+- [x] fixtures: 5 geocoding, 3 forecast, 3 marine files; README records date, first daily date per fixture, and the all-null marine files.
+- [x] CI workflow present with the Node 22 and 24 matrix (its first green run is confirmed in P7 after the push).
 
 **Commits.** `chore: scaffold TypeScript/Node 24 project with vitest, CI and pre-commit check` · `test: capture Open-Meteo fixtures for Chamonix, Lisbon and Denver`.
 

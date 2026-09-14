@@ -1,0 +1,35 @@
+{
+  "results": [
+    {
+      "id": 3027301,
+      "name": "Chamonix",
+      "latitude": 45.92375,
+      "longitude": 6.86933,
+      "elevation": 1060,
+      "feature_code": "PPL",
+      "country_code": "FR",
+      "admin1_id": 11071625,
+      "admin2_id": 3013736,
+      "admin3_id": 3031676,
+      "admin4_id": 6614739,
+      "timezone": "Europe/Paris",
+      "population": 10614,
+      "postcodes": [
+        "74400",
+        "74401 CEDEX",
+        "74402 CEDEX",
+        "74403 CEDEX",
+        "74404 CEDEX",
+        "74405 CEDEX",
+        "74409 CEDEX"
+      ],
+      "country_id": 3017382,
+      "country": "France",
+      "admin1": "Rhône-Alpes",
+      "admin2": "Upper Savoy",
+      "admin3": "Arrondissement de Bonneville",
+      "admin4": "Chamonix"
+    }
+  ],
+  "generationtime_ms": 0.30565262
+}
