@@ -20,11 +20,24 @@ if (!command) process.exit(0);
 // Split on shell separators so each simple command is checked on its own.
 const parts = command.split(/&&|\|\||;|\||\r?\n/).map((p) => p.trim()).filter(Boolean);
 
+// Package names only. Flags are not packages, and neither are shell redirections
+// (`2>&1`, `> log`, `< in`, a trailing `&`), which sit on the same command line but
+// are not arguments to npm.
+function packageArgs(rest) {
+  return rest
+    .replace(/\d*>>?\s*&\s*\d+/g, ' ')
+    .replace(/\d*>>?\s*\S+/g, ' ')
+    .replace(/<\s*\S+/g, ' ')
+    .replace(/\s&\s*$/, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter((t) => t && !t.startsWith('-'));
+}
+
 function addsDependency(part) {
   const m = part.match(/^(?:npx\s+)?(npm|pnpm|yarn|bun)\s+(install|i|add|isntall)\b(.*)$/);
   if (!m) return false;
-  const positional = m[3].trim().split(/\s+/).filter((t) => t && !t.startsWith('-'));
-  return positional.length > 0; // bare `npm install` / `npm i` / `npm ci` are fine
+  return packageArgs(m[3]).length > 0; // bare `npm install` / `npm i` / `npm ci` are fine
 }
 const bypassesPreCommit = (part) => /^git\s+commit\b/.test(part) && /(^|\s)(--no-verify|-n)(\s|$)/.test(part);
 const forcePushes = (part) => /^git\s+push\b/.test(part) && /(^|\s)(--force|-f|--force-with-lease)(\s|$)/.test(part);

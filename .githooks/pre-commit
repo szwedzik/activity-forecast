@@ -1,0 +1,4 @@
+#!/bin/sh
+# Refuse red commits (AGENTS.md). Wired up by `npm install` via the prepare script.
+# Bypassing this with --no-verify is blocked by .claude/hooks/guard.mjs.
+npm run check

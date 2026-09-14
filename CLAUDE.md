@@ -8,3 +8,4 @@ Claude Code notes:
 - P4 and P5: go into plan mode first (EnterPlanMode) and write the state table or the wiring down before editing.
 - /code-review at the end of each phase, /simplify and /security-review in P7, /fewer-permission-prompts after P1.
 - Installed globally and worth using: the vitest skill (antfu) for test setup, the node skill (mcollina) for shutdown and error patterns, graphql-schema (Apollo) when reviewing the SDL in P5.
+- Commit messages end with the Co-Authored-By line and nothing else. No Claude-Session trailer.

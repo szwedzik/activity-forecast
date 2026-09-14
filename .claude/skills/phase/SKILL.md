@@ -22,6 +22,6 @@ Execute phase $phase of `docs/PHASES.md`.
 - Run the `phase-reviewer` subagent with "Review P$phase". Resolve FAIL findings. Anything you consciously skip gets a line in WORKLOG saying why.
 
 ## 4. Log and hand over
-- Append the WORKLOG entry in the same shape as the previous ones: date, phase, what was built, what changed against the plan and why, what was skipped, what surprised you.
+- Append the WORKLOG entry in the same shape as the previous ones: header line with date, phase and rough time, then short fragments. No labels like "deviation:" or "surprise:" — a taxonomy reads as a filled-in form. Keep the numbers and names, cut anything the diff already shows. Leave judgments about the process itself to the owner.
 - Propose the commit(s): Conventional Commits subject; body with the why and D-/Q- references. Do not commit until the user says so, and never with `--no-verify`.
 - Finish with at most 8 lines: what is done, what is not, what the next phase needs.
