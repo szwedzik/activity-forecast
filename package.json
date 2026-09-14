@@ -1,0 +1,35 @@
+{
+  "name": "activity-forecast",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Ranks the next 7 days for skiing, surfing and sightseeing at a town, from persisted Open-Meteo data.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node --env-file-if-exists=.env dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm run test",
+    "capture-fixtures": "tsx scripts/capture-fixtures.ts",
+    "score-fixture": "tsx scripts/score-fixture.ts",
+    "prepare": "git config core.hooksPath .githooks || exit 0"
+  },
+  "dependencies": {
+    "graphql": "^16.14.0",
+    "graphql-yoga": "^5.23.0",
+    "pino": "^10.3.0",
+    "zod": "^4.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.0",
+    "tsx": "^4.23.0",
+    "typescript": "~5.9.3",
+    "vitest": "^4.1.0"
+  }
+}
