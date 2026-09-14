@@ -251,9 +251,9 @@ test/unit/services/**
 **Tests.** D§10 bullets 4–5 in full, with a fixed clock, real `:memory:` SQLite (cheap, and it exercises the SQL) and fake clients.
 
 **DoD.**
-- [ ] each row of the D§6.1 table and each bullet of D§6.4 has a test named after it.
-- [ ] ten concurrent `getBundle()` calls for a cold location cause exactly one fetch per source.
-- [ ] a rejected background refresh is logged, not thrown.
+- [x] each row of the D§6.1 table and each bullet of D§6.4 has a test named after it.
+- [x] ten concurrent `getBundle()` calls for a cold location cause exactly one fetch per source.
+- [x] a rejected background refresh is logged, not thrown.
 
 **Stop-and-ask.** Any change to the TTL defaults or to the state table.
 

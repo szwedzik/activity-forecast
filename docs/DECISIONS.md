@@ -101,3 +101,22 @@ D-018 · 2026-09-14, P3 · every statement binds through one wrapper that normal
 - so query(db, sql) wraps prepare. undefined and null become NULL; booleans become 0 and 1; a Date becomes the ISO string we store anyway; NaN, Infinity, objects, arrays and symbols throw with the parameter name in the message; and a params object missing a name the SQL asks for is refused outright
 - it covers positional parameters as well, which the per-field approach did not
 - checked it by renaming one field to a typo: eight tests went red naming the missing parameter, where before it would have written a NULL
+
+D-019 · 2026-09-14, P4 · a stored snapshot is servable only while it still covers the days being scored
+- D§6.1 says an expired weather fetch that fails is UPSTREAM_UNAVAILABLE. D§6.4 says serve stale if one exists. D§8.3 settles the wording: the error is for unreachable and no servable snapshot
+- what was left open is what servable means. taken as: status ok, and first_date .. last_date still spans today through today plus six
+- an older one would score as seven days of insufficient data, which looks like an answer and is not. an error says the true thing
+- retention already keeps the newest row per location and source forever (D§5.3), so in practice the fallback almost always exists; this only governs the case where it has aged out of the window
+- also decided here: serve stale on any upstream failure, not only a retryable one. a schema change and a 500 both mean no new data, and keying off UpstreamError.retryable would take the service down over a field rename while a good forecast sat in the database
+
+D-020 · 2026-09-14, P4 after review · a stored row that will not parse is missing, not fatal; and an outage does not unlearn geography
+- the reviewer found the worst bug of the phase by probing rather than reading: one stored marine payload the schema rejects took the whole response down, all four activities, because the parse sat outside the try. exactly what D§6.4 forbids, and the opposite of what D-019 argued for
+- the guard had been put on the fetch path and not the read path. a schema can move between the write and the read just as easily
+- so a payload that will not parse is treated as no snapshot: weather falls through to a fetch and then to UPSTREAM_UNAVAILABLE, marine falls to a fetch and then to outage. it is logged either way
+- second, undocumented until now: when the weekly recheck of an inland town fails, the answer stays no-coverage rather than becoming outage. D§6.4 reads the other way, but we already know there is no sea near Denver and an outage is no reason to forget it
+- third: a fetch that succeeds but does not reach the end of the window is served, per D§6.1, and now logs a warning. every later request will fetch again, so the loop should be visible rather than silent
+
+D-021 · 2026-09-14, P4 after review · which layer owns errors and logging
+- services/errors.ts owns ServiceError and its codes; P5 maps those onto GraphQLError in graphql/errors.ts rather than defining a second vocabulary
+- services/logger.ts owns the Logger interface, shaped like pino; P5 creates the pino instance in logger.ts and injects it. nothing below P5 imports pino
+- the TTL constants in freshness.ts and locationService.ts are the D§9 defaults written twice. P5 config.ts becomes the single source and passes them in; the constants stay as the defaults a caller gets when it passes nothing

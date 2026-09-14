@@ -93,3 +93,22 @@ What actually happened, in order. Newest at the bottom. Not polished on purpose.
 - checked it by breaking it on purpose: renamed timezone to timezoen and eight tests went red naming the missing parameter, instead of writing a null
 - also ran the whole spine end to end before committing, since nothing had ever been connected: fixture in, schemas, sqlite, read back out, re-validate, score. payload survives the text column byte for byte, inland stores as unavailable, lisbon wave cell measures 5.4 km offshore against the 5 the design recorded
 - not done here: nothing
+
+2026-09-14 >> Phase 4, ~2h
+- the refresh policy, which is the bit the brief is actually asking about. freshness, location resolution, ranking. 299 tests
+- wrote the state table down in plan mode before touching code, as the plan says. eight rows, eight tests named after them. that was the right order: rows 3 and 5 (recent but no longer covering the window) only exist because writing the table forced the question of whether recent and usable are the same thing
+- they are not, and that is the whole of D-019. an old snapshot scored for a week we have moved past gives seven days of insufficient data, which reads like an answer. serving it would be worse than the error
+- also decided: serve stale on any upstream failure, not just a retryable one. a schema change and a 500 both mean no new data
+- single-flight is one map keyed rowId:source, cleared in finally rather than on success. a failed refresh that kept its promise would have poisoned the location until restart, and there is a test that fails first then succeeds
+- the background refresh from the stale path is deliberately not awaited, so it carries its own catch. without it a slow upstream becomes an unhandled rejection at process level rather than a warning
+- isServable started as a type guard and had to stop being one. declaring it "snapshot is Snapshot" told the compiler that false means undefined, when it actually means the snapshot exists and is useless
+- three files beyond the phase list: freshness.ts (step 2 asks for the pure function but names no file), errors.ts and logger.ts (services have to signal failure and log a caught background rejection without importing GraphQL or pino)
+- closed the P3 carry-forward: the surfing note names the town now. no coverage near Denver vs temporarily unavailable, built in the ranking service because the domain has no idea where it is
+- caught one of my own weak tests before the reviewer did: asserted calls.length >= 2 where the real behaviour is exactly 2 once the detached refresh lands
+- reviewer failed it, and rightly. it probed instead of reading and found the worst bug of the phase: one stored marine payload the schema rejects took the whole response down, all four activities. the parse sat outside the try
+- galling because D-019 had argued the exact opposite the hour before. I guarded the fetch path and forgot the read path, and a schema can move between a write and a read just as easily. D-020
+- it also caught that the inland-recheck-fails case reads against D§6.4 and had no decision entry, that freshnessOf returned string so a P6 typo would compile, and four assertions of mine that could not fail
+- one of those four was interesting: my new test for the marine bug asserted the wrong outcome. the fix was better than I expected, so the corrupt row got refetched instead of degrading. rewrote it to corrupt the row and fail the fetch, which is the case that actually matters
+- weather and marine now run in parallel. they were serial with a comment justifying it, but marinePart never rejects, so the justification was wrong and it was costing a round trip on every cold location
+- D-021 records which layer owns errors and logging, so P5 does not build a second vocabulary next to this one
+- not done here: nothing
