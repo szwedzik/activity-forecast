@@ -84,3 +84,26 @@ describe('the refresher inside the app', () => {
     expect(cycles()).toBe(1);
   });
 });
+
+describe('the health endpoint', () => {
+  it('answers without touching the database or Open-Meteo', async () => {
+    const store = openStore();
+    const geocoding = fakeGeocoding([geocodingResultFor(LISBON)]);
+    const forecast = fakeForecast();
+    const app = createApp({
+      config: loadConfig({}),
+      clock: fixedClock(T0),
+      db: store.db,
+      clients: { geocoding, forecast, marine: fakeMarine() },
+    });
+
+    const response = await app.yoga.fetch('http://localhost/health');
+
+    expect(response.status).toBe(200);
+    // An orchestrator asking whether we are alive should not cost an upstream call.
+    expect(geocoding.calls).toEqual([]);
+    expect(forecast.calls).toEqual([]);
+
+    await app.close();
+  });
+});

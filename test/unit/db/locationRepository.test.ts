@@ -136,16 +136,29 @@ describe('the location repository', () => {
     repository.touch(denver.rowId, '2026-09-14T18:00:00.000Z');
     // `nowhere` is never touched, so it is not active at all.
 
-    const active = repository.recentlyRequested('2026-09-14T00:00:00.000Z');
+    const active = repository.recentlyRequested('2026-09-14T00:00:00.000Z', 10);
 
     expect(active.map((one) => one.name)).toEqual(['Denver', 'Lisbon']);
     expect(active.map((one) => one.rowId)).not.toContain(nowhere.rowId);
+  });
+
+  it('returns at most the number asked for, keeping the most recent', () => {
+    // Anyone can fill this table by asking about a thousand towns once, and the refresher
+    // would then refetch every one of them every ten minutes for a day (D-028).
+    for (let i = 0; i < 5; i += 1) {
+      const place = repository.upsertLocation({ ...SPARSE, geonamesId: 900 + i, name: `Town ${i}` }, T1);
+      repository.touch(place.rowId, `2026-09-14T1${i}:00:00.000Z`);
+    }
+
+    const active = repository.recentlyRequested('2026-09-14T00:00:00.000Z', 2);
+
+    expect(active.map((one) => one.name)).toEqual(['Town 4', 'Town 3']);
   });
 
   it('leaves out places last asked about before the cutoff', () => {
     const stored = repository.upsertLocation(LISBON, T1);
     repository.touch(stored.rowId, '2026-09-10T00:00:00.000Z');
 
-    expect(repository.recentlyRequested('2026-09-13T00:00:00.000Z')).toEqual([]);
+    expect(repository.recentlyRequested('2026-09-13T00:00:00.000Z', 10)).toEqual([]);
   });
 });

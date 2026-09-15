@@ -57,6 +57,12 @@ export interface RefreshSchedulerOptions {
   /** How recently a town must have been asked about to be worth keeping warm. */
   readonly activeWindowMs: number;
   readonly retentionMs: number;
+  /**
+   * Most locations one cycle will touch. Anyone can fill the table by asking about a
+   * thousand towns once, and every one of them would otherwise be refetched every ten
+   * minutes for a day (D-028).
+   */
+  readonly maxLocations?: number;
   /** Delay before the first cycle, so start-up is not competing with itself. */
   readonly startupDelayMs?: number;
   /** Between upstream calls. Politeness to a free, non-commercial tier. */
@@ -66,6 +72,7 @@ export interface RefreshSchedulerOptions {
 
 const DEFAULT_STARTUP_DELAY_MS = 5_000;
 const DEFAULT_PAUSE_MS = 250;
+const DEFAULT_MAX_LOCATIONS = 200;
 
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -117,7 +124,7 @@ export function createRefreshScheduler(options: RefreshSchedulerOptions): Refres
   async function cycle(): Promise<CycleResult> {
     const now = clock.now();
     const since = toIsoUtc(new Date(now.getTime() - options.activeWindowMs));
-    const active = locations.recentlyRequested(since);
+    const active = locations.recentlyRequested(since, options.maxLocations ?? DEFAULT_MAX_LOCATIONS);
     const counts = { refreshed: 0, skipped: 0, failed: 0 };
 
     for (const location of active) {

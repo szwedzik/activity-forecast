@@ -17,6 +17,7 @@ import type { FetchLike } from './adapters/openMeteo/http.js';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
 import { createLogger } from './logger.js';
+import { withBodyLimit } from './httpLimits.js';
 import { createShutdown } from './shutdown.js';
 import { systemClock, toIsoUtc } from './services/clock.js';
 
@@ -46,14 +47,14 @@ const app = createApp({
   },
 });
 
-const server = createServer(app.yoga);
+const server = createServer(withBodyLimit(app.yoga, config.maxBodyBytes, logger));
 
-server.listen(config.port, () => {
+server.listen(config.port, config.host, () => {
   // Only once we are actually serving: nothing to keep warm before that.
   app.refresher.start();
   logger.info(
-    { port: config.port, dbPath: config.dbPath, refreshEnabled: config.refresh.enabled },
-    `activity-forecast listening on http://localhost:${config.port}/graphql`,
+    { host: config.host, port: config.port, dbPath: config.dbPath, refreshEnabled: config.refresh.enabled },
+    `activity-forecast listening on http://${config.host}:${config.port}/graphql`,
   );
 });
 

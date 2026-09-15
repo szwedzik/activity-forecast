@@ -88,6 +88,20 @@ describe('the background cycle', () => {
       expect(marine.calls).toHaveLength(1);
     });
 
+    it('takes at most the number of towns it is configured for', async () => {
+      // The repository has a default of its own, so a scheduler that forgot to pass its
+      // configured bound would still look fine from every other test (D-028).
+      for (let i = 0; i < 4; i += 1) {
+        const town = store.locations.upsertLocation({ ...DENVER, geonamesId: 800 + i, name: `Town ${i}` }, T0);
+        store.locations.touch(town.rowId, toIsoUtc(new Date(clock.now().getTime() - i * 60_000)));
+      }
+      store.locations.touch(lisbon.rowId, T0);
+
+      const result = await build({ maxLocations: 2 }).runCycle();
+
+      expect(result.locations).toBe(2);
+    });
+
     it('leaves alone a town nobody has asked about in a day', async () => {
       store.locations.touch(lisbon.rowId, toIsoUtc(new Date(clock.now().getTime() - 25 * HOUR)));
 

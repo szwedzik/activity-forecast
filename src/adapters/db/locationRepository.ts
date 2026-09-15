@@ -32,7 +32,11 @@ export interface LocationRepository {
   findByQueryKey(key: string): CachedQuery | undefined;
   cacheQuery(key: string, locationId: number | null, resolvedAt: string): void;
   touch(locationId: number, at: string): void;
-  recentlyRequested(since: string): Location[];
+  /**
+   * Most recently asked about first, and never more than `limit` of them: the caller
+   * cannot forget to bound this, because anyone can fill the table (D-028).
+   */
+  recentlyRequested(since: string, limit?: number): Location[];
 }
 
 interface LocationRow {
@@ -122,9 +126,10 @@ export function createLocationRepository(db: Database): LocationRepository {
       resolved_at = excluded.resolved_at`,
   );
   const touchOne = query(db, 'UPDATE locations SET last_requested_at = ? WHERE id = ?');
+  const DEFAULT_LIMIT = 500;
   const recent = query<LocationRow>(
     db,
-    'SELECT * FROM locations WHERE last_requested_at >= ? ORDER BY last_requested_at DESC',
+    'SELECT * FROM locations WHERE last_requested_at >= ? ORDER BY last_requested_at DESC LIMIT ?',
   );
 
   return {
@@ -169,8 +174,8 @@ export function createLocationRepository(db: Database): LocationRepository {
       touchOne.run(at, locationId);
     },
 
-    recentlyRequested(since) {
-      return recent.all(since).map(toLocation);
+    recentlyRequested(since, limit = DEFAULT_LIMIT) {
+      return recent.all(since, limit).map(toLocation);
     },
   };
 }

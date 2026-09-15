@@ -5,6 +5,7 @@
  * and fake clients and gets a working API with no port open and no network reachable,
  * while `index.ts` passes the real ones. Nothing here reads the environment or the disk.
  */
+import type { Plugin } from 'graphql-yoga';
 import { createSchema, createYoga } from 'graphql-yoga';
 
 import type { Database } from './adapters/db/database.js';
@@ -16,6 +17,7 @@ import type { MarineClient } from './adapters/openMeteo/marineClient.js';
 import type { Config } from './config.js';
 import type { ResolverContext } from './graphql/resolvers.js';
 import { createMaskError } from './graphql/errors.js';
+import { rootFieldLimit } from './graphql/limits.js';
 import { resolvers } from './graphql/resolvers.js';
 import { typeDefs } from './graphql/schema.js';
 import type { Clock } from './services/clock.js';
@@ -51,6 +53,13 @@ export interface AppOptions {
  */
 export type Yoga = ReturnType<typeof buildYoga>;
 
+/** Breadth, decided before any resolver runs (D-028). */
+const limits: Plugin<ResolverContext> = {
+  onValidate({ addValidationRule }) {
+    addValidationRule(rootFieldLimit());
+  },
+};
+
 function buildYoga(context: ResolverContext, logger: Logger) {
   return createYoga({
     schema: createSchema<ResolverContext>({ typeDefs, resolvers }),
@@ -58,6 +67,16 @@ function buildYoga(context: ResolverContext, logger: Logger) {
     // Masking stays on, but the decision of what may be seen is ours, and an error
     // nobody may see still gets logged (D§8.3, D-023).
     maskedErrors: { maskError: createMaskError(logger) },
+    plugins: [limits],
+    // Off: it keeps the source and the AST of every distinct query for an hour, which
+    // turns a stream of large unique queries into memory we never get back (D-028).
+    parserAndValidationCache: false,
+    // No browser has any business calling this from another origin, and the default
+    // reflects whatever Origin it is given, with credentials (D-028).
+    cors: false,
+    // Something an orchestrator can ask without running a query. The container's
+    // HEALTHCHECK uses it.
+    healthCheckEndpoint: '/health',
     landingPage: false,
     logging: false,
   });
@@ -112,6 +131,7 @@ export function createApp(options: AppOptions): App {
     enabled: config.refresh.enabled,
     intervalMs: config.refresh.intervalMs,
     activeWindowMs: config.refresh.activeWindowMs,
+    maxLocations: config.refresh.maxLocations,
     retentionMs: config.snapshotRetentionMs,
   });
 

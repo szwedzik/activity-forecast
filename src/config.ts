@@ -13,7 +13,12 @@ const minutes = (fallback: number) => z.coerce.number().positive().default(fallb
 
 const schema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
+  // Loopback, because the service has no auth and nothing about it wants to be reachable
+  // from the rest of the network by default. The container sets 0.0.0.0 (D-028).
+  HOST: z.string().min(1).default('127.0.0.1'),
   DB_PATH: z.string().min(1).default('./data/app.db'),
+  // A GraphQL request is a few hundred bytes. Anything near this is not a client.
+  MAX_BODY_BYTES: z.coerce.number().int().positive().default(32_768),
 
   OPEN_METEO_GEOCODING_URL: z.url().default('https://geocoding-api.open-meteo.com/v1/search'),
   OPEN_METEO_FORECAST_URL: z.url().default('https://api.open-meteo.com/v1/forecast'),
@@ -36,6 +41,7 @@ const schema = z.object({
     .transform((value) => value === 'true'),
   REFRESH_INTERVAL_MINUTES: minutes(10),
   REFRESH_ACTIVE_WINDOW_HOURS: hours(24),
+  REFRESH_MAX_LOCATIONS: z.coerce.number().int().positive().default(200),
 
   SNAPSHOT_RETENTION_HOURS: hours(48),
 
@@ -47,7 +53,9 @@ const DAY_MS = 24 * HOUR_MS;
 
 export interface Config {
   readonly port: number;
+  readonly host: string;
   readonly dbPath: string;
+  readonly maxBodyBytes: number;
   readonly openMeteo: {
     readonly geocodingUrl: string;
     readonly forecastUrl: string;
@@ -66,6 +74,7 @@ export interface Config {
     readonly enabled: boolean;
     readonly intervalMs: number;
     readonly activeWindowMs: number;
+    readonly maxLocations: number;
   };
   readonly snapshotRetentionMs: number;
   readonly logLevel: string;
@@ -89,7 +98,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 
   return {
     port: value.PORT,
+    host: value.HOST,
     dbPath: value.DB_PATH,
+    maxBodyBytes: value.MAX_BODY_BYTES,
     openMeteo: {
       geocodingUrl: value.OPEN_METEO_GEOCODING_URL,
       forecastUrl: value.OPEN_METEO_FORECAST_URL,
@@ -113,6 +124,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       enabled: value.REFRESH_ENABLED,
       intervalMs: value.REFRESH_INTERVAL_MINUTES * 60_000,
       activeWindowMs: value.REFRESH_ACTIVE_WINDOW_HOURS * HOUR_MS,
+      maxLocations: value.REFRESH_MAX_LOCATIONS,
     },
     snapshotRetentionMs: value.SNAPSHOT_RETENTION_HOURS * HOUR_MS,
     logLevel: value.LOG_LEVEL,
