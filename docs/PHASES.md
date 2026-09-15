@@ -337,7 +337,7 @@ test/integration/**
 
 **DoD.**
 - [x] README answers: what, how to run, assumptions, limitations, next steps.
-- [ ] CI green on `main`.
+- [x] CI green on `main`.
 - [x] fresh clone runs.
 - [x] WORKLOG has the final entry.
 

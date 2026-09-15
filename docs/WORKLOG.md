@@ -222,4 +222,6 @@ What actually happened, in order. Newest at the bottom. Not polished on purpose.
 - the README now says which activity is hollow and why. skiing is scored at the town rather than at the lifts, and Queenstown settled that it is not a hemisphere problem: late winter in New Zealand, no snow at 328 m, ski fields above 1600 m. Ushuaia was the only town I found where it comes back alive
 - and it says what I did not build. the brief asked for focus over volume, and the list of things I decided against was sitting in AGENTS.md where a reviewer would never look
 - replayed all five commits one at a time from a clean HEAD and ran the suite on each: 369, 381, 382, 380, 383. green in isolation, not only at the end
+- pushed. the repo had a LICENSE commit from GitHub's own repo creation, so the twenty local commits are rebased onto it rather than forced over it. identical file, only the line endings differed
+- CI green on main on both node versions, 19s and 15s. cloned the public repo into a temp directory and ran it there too: 121 files, npm ci clean, 383 tests, and task.pdf correctly absent
 - not done here: no snow fixture. the bug D-029 hid in was exactly the case three fixtures cannot reach, and capturing one needs a live call I did not want to make unasked
