@@ -65,6 +65,15 @@ export interface ActivityRules {
   readonly window: Window;
   readonly criteria: readonly Criterion[];
   readonly gates: readonly Gate[];
+  /**
+   * Why this particular day cannot be assessed at all, if it cannot (D§7.2, D-030).
+   *
+   * Renormalising over whichever criteria happen to be present is right for a gap in a
+   * supporting measurement and wrong for a gap in the thing being measured: with no wave
+   * data a surfing day would score on wind and air temperature alone, come out perfect,
+   * and outrank a day with a real swell.
+   */
+  readonly applicable?: (features: DayFeatures) => string | undefined;
 }
 
 export interface ScoredDay {
@@ -105,12 +114,20 @@ function clamp(value: number, low: number, high: number): number {
   return Math.min(high, Math.max(low, value));
 }
 
+/**
+ * A factor is a published artifact, not an intermediate. Four decimals is past anything
+ * the curves can justify and stops `0.9350125` turning up next to an integer score.
+ */
+function published(effect: number): number {
+  return Math.round(effect * 10_000) / 10_000;
+}
+
 function usable(value: number | undefined): value is number {
   return value !== undefined && Number.isFinite(value);
 }
 
-/** A day with no forecast at all: scored zero and labelled, never guessed at. */
-function withoutData(date: string): ScoredDay {
+/** A day that cannot be assessed: scored zero and labelled, never guessed at. */
+function withoutData(date: string, note = 'insufficient data'): ScoredDay {
   return {
     date,
     score: 0,
@@ -122,7 +139,7 @@ function withoutData(date: string): ScoredDay {
         kind: 'GATE',
         value: 'no forecast data for this day',
         effect: 0,
-        note: 'insufficient data',
+        note,
       },
     ],
   };
@@ -142,6 +159,11 @@ function orderFactors(gates: ScoreFactor[], criteria: ScoreFactor[]): ScoreFacto
 }
 
 export function scoreDay(rules: ActivityRules, features: DayFeatures, leadDay: number): ScoredDay {
+  // Asked before anything is measured: a day the activity cannot be judged on is not
+  // a low score, it is an absence of one.
+  const unassessable = rules.applicable?.(features);
+  if (unassessable !== undefined) return withoutData(features.date, unassessable);
+
   const criterionFactors: ScoreFactor[] = [];
   let weighted = 0;
   let totalWeight = 0;
@@ -160,7 +182,7 @@ export function scoreDay(rules: ActivityRules, features: DayFeatures, leadDay: n
       name: criterion.name,
       kind: 'CRITERION',
       value: criterion.format(value),
-      effect,
+      effect: published(effect),
       weight: criterion.weight,
     });
   }
@@ -181,7 +203,7 @@ export function scoreDay(rules: ActivityRules, features: DayFeatures, leadDay: n
         name: gate.name,
         kind: 'GATE',
         value: result.value ?? '',
-        effect: clamp(result.effect, 0, 1),
+        effect: published(clamp(result.effect, 0, 1)),
         ...(result.note === undefined ? {} : { note: result.note }),
       });
     }

@@ -21,8 +21,14 @@ import { describeWeatherCode, worstWeatherCode } from './weatherCodes.js';
 /** Today plus the following six (Q1). */
 export const RANKED_DAYS = 7;
 
-/** Open-Meteo converts snow to water equivalent at this ratio (D§2.2). */
-const SNOW_WATER_RATIO = 7;
+/**
+ * Centimetres of snow per millimetre of water (D§2.2 as corrected, D-029).
+ *
+ * The units are the whole point: Open-Meteo reports snowfall in cm and precipitation in
+ * mm, so 7:1 in matching units is 0.7 here. Measured against the live API at -20 °C,
+ * where nothing can be falling as rain, 0.1 mm of precipitation comes back as 0.07 cm.
+ */
+const SNOW_CM_PER_WATER_MM = 0.7;
 /** Below this an hour is not meaningfully wet. */
 const WET_HOUR_MM = 0.1;
 
@@ -114,7 +120,7 @@ function liquidRain(weather: WeatherPayload, indices: readonly number[]): number
     const total = value(precipitation, index);
     if (total === undefined) continue;
     const snow = value(snowfall, index) ?? 0;
-    hourly.push(Math.max(0, total - snow / SNOW_WATER_RATIO));
+    hourly.push(Math.max(0, total - snow / SNOW_CM_PER_WATER_MM));
   }
   return sum(hourly);
 }

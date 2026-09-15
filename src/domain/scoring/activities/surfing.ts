@@ -11,6 +11,13 @@ import { celsius, curveGate, fraction, hours, kmh, metres, seconds } from './sha
 
 export const surfing: ActivityRules = {
   activity: 'SURFING',
+
+  // The sea is the activity. Wave models run out before weather models do, so a location
+  // can have waves for three days and nothing after, and those later days must not be
+  // scored on how pleasant the air is (D-030).
+  applicable: (features) =>
+    features.waveHeightMeanM === undefined ? 'no wave data for this day' : undefined,
+
   // Daylight varies enormously with latitude and season; a fixed window would judge a
   // Norwegian December against a Portuguese June. Polar night falls back to 06:00–18:00.
   window: { kind: 'daylight', fallbackFromHour: 6, fallbackToHour: 18 },

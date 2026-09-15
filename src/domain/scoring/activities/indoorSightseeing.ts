@@ -62,14 +62,18 @@ export function deriveIndoorDay(outdoor: ScoredDay, features: DayFeatures): Scor
 
   const opportunity = 1 - outdoor.score / 100;
   const travel = travelGate(features);
-  const score = Math.round(100 * (FLOOR + RANGE * opportunity) * (travel?.effect ?? 1));
+  // Published as the factor's effect, so the one criterion and the gate multiply back to
+  // the score exactly the way every other activity's do (D-031). Rounded before the score
+  // is taken from it, not after, so the number shipped is the number used.
+  const desirability = Math.round((FLOOR + RANGE * opportunity) * 10_000) / 10_000;
+  const score = Math.round(100 * desirability * (travel?.effect ?? 1));
 
   const factors: ScoreFactor[] = [
     {
       name: 'outdoorConditions',
       kind: 'CRITERION',
       value: `outdoor score ${outdoor.score}`,
-      effect: opportunity,
+      effect: desirability,
       weight: 1,
       note:
         outdoor.score <= 40

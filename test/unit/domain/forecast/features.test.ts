@@ -141,16 +141,29 @@ describe('null tolerance', () => {
   });
 
   it('derives liquid rain by removing the water equivalent of the snow (D§2.2)', () => {
-    const weather = makeWeather({
+    // precipitation is mm of water, snowfall is cm of snow. Measured against the live API
+    // at -20 °C, where nothing falls as rain: 0.1 mm of precipitation is 0.07 cm of snow.
+    // So a centimetre of snow is 1/0.7 mm of water, and 7 cm is 10 mm (D-029).
+    const allSnow = makeWeather({
       startDate: '2026-09-14',
       days: 1,
-      hourly: { precipitation: 1, snowfall: 7 },
+      hourly: { precipitation: 10, snowfall: 7 },
     });
-    const [day] = extractDayFeatures({ weather }, '2026-09-14', TOURING, 1);
+    const mixed = makeWeather({
+      startDate: '2026-09-14',
+      days: 1,
+      hourly: { precipitation: 12, snowfall: 7 },
+    });
 
-    // 7 cm of snow is 1 mm of water, so a 1 mm hour is all snow and no rain.
-    expect(day?.precipMm).toBe(9);
-    expect(day?.rainMm).toBe(0);
+    const snowDay = extractDayFeatures({ weather: allSnow }, '2026-09-14', TOURING, 1)[0];
+    const mixedDay = extractDayFeatures({ weather: mixed }, '2026-09-14', TOURING, 1)[0];
+
+    // Every millimetre is accounted for by the snow, so not a drop of it is rain.
+    expect(snowDay?.precipMm).toBe(90);
+    expect(snowDay?.rainMm).toBe(0);
+    // Only the 2 mm an hour the snow cannot explain is rain.
+    expect(mixedDay?.precipMm).toBe(108);
+    expect(mixedDay?.rainMm).toBeCloseTo(18, 6);
   });
 });
 

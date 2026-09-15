@@ -8,6 +8,7 @@ import { RULES, windowFor } from '../../../../src/domain/scoring/activities/inde
 import { isValidCurve } from '../../../../src/domain/scoring/curve.js';
 import { rankActivities, rankActivity } from '../../../../src/domain/scoring/index.js';
 import { FIXTURE_TODAY, loadMarine, loadWeather } from '../../../helpers/fixtures.js';
+import { makeMarine, makeWeather } from '../../../helpers/payloads.js';
 
 const CITIES = ['chamonix', 'lisbon', 'denver'] as const;
 
@@ -180,5 +181,116 @@ describe('window choice changes the answer', () => {
 
     expect(lift[0]?.hoursInWindow).toBe(7);
     expect(touring[0]?.hoursInWindow).toBe(9);
+  });
+});
+
+describe('a payload all the way through to a score', () => {
+  // Every row of the D§7.7 band table starts from a hand-built DayFeatures, so the step
+  // from a payload to those features was never scored. A unit slip lived there: snowfall
+  // is centimetres of snow and precipitation is millimetres of water, and dividing one by
+  // the other at 7 instead of 0.7 left nearly all of the snow counted as rain. It made
+  // the best possible ski day UNSUITABLE through the gate written to catch the worst one
+  // (D-029). No fixture contains snow, so nothing else goes near this.
+  it('scores a cold day of steady snow as a day worth skiing', () => {
+    const weather = makeWeather({
+      startDate: '2026-09-14',
+      days: 1,
+      hourly: {
+        temperature_2m: -6,
+        apparent_temperature: -11,
+        // 2 cm of snow an hour is 2.86 mm of water, so 2.8 mm of precipitation is snow
+        // and nothing else.
+        precipitation: 2.8,
+        snowfall: 2,
+        snow_depth: 1.2,
+        wind_speed_10m: 8,
+        wind_gusts_10m: 20,
+        visibility: 10_000,
+        cloud_cover: 60,
+        weather_code: 73,
+      },
+      daily: { snowfall_sum: 14 },
+    });
+
+    const [day] = extractDayFeatures({ weather }, '2026-09-14', windowFor('SKIING'), 1);
+    expect(day?.rainMm).toBe(0);
+
+    const ranking = rankActivity('SKIING', [day as DayFeatures]);
+    const [scored] = ranking.days;
+
+    // -6 °C, light wind, good visibility, 14 cm of new snow on a 1.2 m base: the band
+    // the curves give it is EXCELLENT, and that is the right answer for a day like this.
+    expect(scored?.score).toBeGreaterThanOrEqual(85);
+    expect(scored?.suitability).toBe('EXCELLENT');
+    // The rain-on-snow gate has nothing to fire on.
+    expect(scored?.factors.map((one) => one.name)).not.toContain('rainOnSnow');
+  });
+});
+
+describe('a week the wave model only half covers', () => {
+  // Weather models run further out than wave models, so partial coverage is the normal
+  // case rather than an exotic one. Renormalising over the criteria that remain gave the
+  // days we know nothing about a perfect score on wind and air temperature alone, and
+  // they outranked days with a real swell (D-030).
+  const week = () => {
+    const weather = makeWeather({
+      startDate: '2026-09-14',
+      days: 7,
+      hourly: { wind_speed_10m: 6, wind_gusts_10m: 12, apparent_temperature: 24, is_day: 1 },
+    });
+    const marine = makeMarine({
+      startDate: '2026-09-14',
+      days: 7,
+      hourly: {
+        // A real swell for three days, then the model has nothing to say.
+        wave_height: (time) => (time < '2026-09-17' ? 1.4 : null),
+        wave_period: (time) => (time < '2026-09-17' ? 11 : null),
+        swell_wave_period: (time) => (time < '2026-09-17' ? 11 : null),
+        wind_wave_height: (time) => (time < '2026-09-17' ? 0.2 : null),
+      },
+    });
+    return extractDayFeatures({ weather, marine }, '2026-09-14', windowFor('SURFING'), 7);
+  };
+
+  it('ranks the days it knows about above the days it does not', () => {
+    const ranking = rankActivity('SURFING', week());
+
+    expect(ranking.applicable).toBe(true);
+    const top = ranking.days.slice(0, 3);
+    expect(top.map((one) => one.date)).toEqual(['2026-09-14', '2026-09-15', '2026-09-16']);
+    expect(top.every((one) => one.score > 0)).toBe(true);
+  });
+
+  it('says it cannot assess the rest rather than scoring them on the breeze', () => {
+    const ranking = rankActivity('SURFING', week());
+    const unknown = ranking.days.filter((one) => one.date >= '2026-09-17');
+
+    expect(unknown).toHaveLength(4);
+    for (const day of unknown) {
+      expect(day.suitability).toBe('NOT_APPLICABLE');
+      expect(day.score).toBe(0);
+      expect(day.factors[0]?.note).toBe('no wave data for this day');
+    }
+  });
+});
+
+describe('a score can be rebuilt from the factors it ships with', () => {
+  // AGENTS.md calls the factors the product, and D§8.1 contracts `effect` as the
+  // criterion's desirability or the gate's multiplier. Indoor published the opportunity
+  // instead, so its only factor said 0.06 on a day it scored 58 (D-031).
+  it('holds for indoor sightseeing, which derives its score rather than measuring it', () => {
+    const data = dataFor('denver');
+    const rankings = rankActivities(data, FIXTURE_TODAY);
+    const indoor = rankings.find((one) => one.activity === 'INDOOR_SIGHTSEEING');
+
+    for (const day of indoor?.days ?? []) {
+      const criteria = day.factors.filter((one) => one.kind === 'CRITERION');
+      const gates = day.factors.filter((one) => one.kind === 'GATE');
+      const weighted = criteria.reduce((total, one) => total + one.effect * (one.weight ?? 1), 0);
+      const totalWeight = criteria.reduce((total, one) => total + (one.weight ?? 1), 0);
+      const gateProduct = gates.reduce((product, one) => product * one.effect, 1);
+
+      expect(Math.round(100 * (weighted / totalWeight) * gateProduct), day.date).toBe(day.score);
+    }
   });
 });

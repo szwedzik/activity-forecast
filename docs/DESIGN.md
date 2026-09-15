@@ -59,7 +59,7 @@ latitude=..&longitude=..&timezone=auto&forecast_days=8
 - Units: °C; `precipitation` mm; `snowfall` **cm**; `snow_depth` **metres**; `visibility` metres; wind km/h; `sunshine_duration` and `daylight_duration` seconds; `is_day` 0/1; `weather_code` WMO.
 - Payload ≈ 17 KB per location for 8 days.
 - Any array element may be `null` for some models/regions. Type everything as `number | null` and aggregate defensively.
-- Liquid precipitation: the hourly `rain` variable excludes showers, so derive liquid as `max(0, precipitation − snowfall / 7)` per hour (Open-Meteo converts snow to water-equivalent at 7:1).
+- Liquid precipitation: the hourly `rain` variable excludes showers, so derive liquid as `max(0, precipitation − snowfall / 0.7)` per hour. *(2026-09-14, D-029: this said `/ 7`, which is 7:1 in matching units and wrong here, because `precipitation` is millimetres of water and `snowfall` is centimetres of snow. Measured against the live API at −20 °C, where nothing falls as rain: 0.1 mm of precipitation comes back as 0.07 cm of snow, so a centimetre of snow is 1/0.7 mm of water. The original divisor counted about nine tenths of falling snow as rain, which put the rain-on-snow gate hardest on the best ski days.)*
 
 ### 2.3 Marine forecast — `GET https://marine-api.open-meteo.com/v1/marine`
 
@@ -272,7 +272,7 @@ Every `REFRESH_INTERVAL_MINUTES` (10): load locations with `last_requested_at` w
 - HTTP: `AbortSignal.timeout(HTTP_TIMEOUT_MS)`, one retry after 500 ms on network errors and 5xx, no retry on 4xx. *(2026-09-12, D-012)* 429 is not retried either, since a second call within the same second cannot help, but it is `retryable: true` so a stale snapshot gets served. `User-Agent` is the constant `activity-forecast/1.0`. Errors are `UpstreamError { status?, retryable }`. A zod parse failure is treated as an upstream error and logged with its first issue.
 - Weather fetch fails: serve stale if one exists (`stale: true`), else `UPSTREAM_UNAVAILABLE`.
 - Marine fetch fails: serve stale marine if it exists; otherwise return the response with surfing `applicable: false` and note "wave data temporarily unavailable". A marine outage must not take down the other three activities. This is distinct from the stored `unavailable` snapshot (inland), whose note says there is no wave-model coverage.
-- Geocoding fails: `UPSTREAM_UNAVAILABLE`. Misses are cached for `GEOCODE_MISS_TTL_HOURS` (24); hits for `GEOCODE_TTL_DAYS` (30). *(2026-09-12, D-012)* `searchLocations` is a pass-through with no cache and does not touch `last_requested_at`; a geocoder outage is `UPSTREAM_UNAVAILABLE` there too.
+- Geocoding fails: `UPSTREAM_UNAVAILABLE`. Misses are cached for `GEOCODE_MISS_TTL_HOURS` (24); hits for `GEOCODE_TTL_DAYS` (30). *(2026-09-14, D-032: only for a name never resolved before. An expired hit is served with a warning instead, because a town does not move and its forecast is already stored.)* *(2026-09-12, D-012)* `searchLocations` is a pass-through with no cache and does not touch `last_requested_at`; a geocoder outage is `UPSTREAM_UNAVAILABLE` there too.
 - Background refresh rejections are caught and logged; never an unhandled rejection.
 
 ---
@@ -310,16 +310,16 @@ Also build a chronological `DaySummary` per date from the daily block (for the `
 type Curve = ReadonlyArray<readonly [x: number, y: number]>;   // sorted by x; linear between points; clamped outside
 type Criterion = { name: string; weight: number; feature: keyof DayFeatures; curve: Curve; format: (v: number) => string };
 type Gate = { name: string; apply: (f: DayFeatures) => { effect: number; value?: string; note?: string } | undefined };
-type ActivityRules = { window: Window; criteria: Criterion[]; gates: Gate[]; applicable?: (f: DayFeatures) => string | undefined };
+type ActivityRules = { window: Window; criteria: Criterion[]; gates: Gate[]; applicable?: (f: DayFeatures) => string | undefined };   // `applicable` returns why this day cannot be judged at all
 ```
 
 - **Criterion** contributes `weight × desirability(feature)`; desirability is the curve value in [0, 1].
 - **Gate** returns a multiplier in [0, 1], normally 1. Gates model "unsafe or impossible" (thunderstorm, no snow, flat sea), which a weighted average would wrongly dilute. *(2026-09-12, D-011: also anything that dominates the day regardless of the rest, such as rain on snow, a whiteout or a washout. Working the numbers showed the weighted average padding those cases into GOOD and EXCELLENT.)*
-- **Score** `= round(100 × Σ(wᵢ·dᵢ) / Σwᵢ × Π gates)`, sums over criteria whose feature is present. Missing data renormalises the weights (it neither counts as 0 nor 1) and lowers confidence. If no criterion has data, the day is `NOT_APPLICABLE` with note "insufficient data".
+- **Score** `= round(100 × Σ(wᵢ·dᵢ) / Σwᵢ × Π gates)`, sums over criteria whose feature is present. Missing data renormalises the weights (it neither counts as 0 nor 1) and lowers confidence. If no criterion has data, the day is `NOT_APPLICABLE` with note "insufficient data". *(2026-09-14, D-030: renormalising is right for a gap in a supporting measurement and wrong for a gap in the thing being measured. `applicable` is now implemented and surfing uses it: with no wave height for a day, that day is `NOT_APPLICABLE`, because otherwise it scored on wind and air temperature alone, came out perfect, and outranked days with a real swell.)*
 - **Label**: ≥ 80 EXCELLENT · ≥ 60 GOOD · ≥ 40 FAIR · ≥ 20 POOR · else UNSUITABLE; `NOT_APPLICABLE` when the activity cannot be assessed.
 - **Confidence** (reported, never folded into the score): by lead time `[0.95, 0.90, 0.80, 0.70, 0.60, 0.50, 0.45]` for day 0…6, minus 0.1 if any criterion was skipped for missing data, floored at 0.2. A stated heuristic; the honest upgrade is Open-Meteo's Ensemble API (member spread). Snapshot age is not folded in either; it is exposed as `weatherFetchedAt`, `marineFetchedAt` and `stale` *(2026-09-12, D-012)*.
 - **Ranking**: score desc, then confidence desc, then date asc; rank 1…7. Days that are `NOT_APPLICABLE` for lack of data sort after every scored day, by date *(2026-09-12, D-012)*.
-- **Factors**: every criterion (`effect` = desirability, `weight`) and every gate with `effect < 1`. Gates first, then criteria by `weight × (1 − effect)` descending, so the first factor is always the biggest reason the score is not 100. `value` is a formatted string with unit and statistic, e.g. `"-4.2 °C daytime mean"`.
+- **Factors**: every criterion (`effect` = desirability, `weight`) and every gate with `effect < 1`. *(2026-09-14, D-031: indoor published `1 − outdoor/100` as its effect, which does not multiply back to its own score. It now publishes `0.55 + 0.45 × that`, so every activity's factors reconstruct its score.)* Gates first, then criteria by `weight × (1 − effect)` descending, so the first factor is always the biggest reason the score is not 100. `value` is a formatted string with unit and statistic, e.g. `"-4.2 °C daytime mean"`.
 
 ### 7.3 Skiing — window 09:00–16:00
 
@@ -399,7 +399,7 @@ Criteria
 
 - Floor of 55 (FAIR) on a perfect day: museums are always an option, but you would be missing the weather. Ceiling 100 when outdoors is hopeless. Indoor and outdoor rankings are therefore near mirror images, which is exactly the planning signal ("do the galleries on Tuesday when it rains").
 - `travelGate`: gusts ≥ 100 km/h → 0.6; blizzard (`snowfallDayCm ≥ 15` with `gustMaxKmh ≥ 50`, or codes 75/86 with gusts ≥ 50) → 0.7; apparent mean ≤ −25 °C → 0.75; apparent max ≥ 42 °C → 0.85; thunderstorm → 0.9. Moving between venues is the only way weather hurts an indoor day.
-- Factors: `outdoorConditions` (effect `= 1 − outdoor/100`, note e.g. "outdoor score 23: strong case for an indoor day") plus any travel gate.
+- Factors: `outdoorConditions` plus any travel gate. *(2026-09-14, D-031: the effect published is `0.55 + 0.45 × (1 − outdoor/100)`, the desirability the score is actually built from, not the bare opportunity. The outdoor score it came from stays in the factor's value, e.g. "outdoor score 23".)*
 - README must say plainly: venue opening days and hours dominate real indoor planning and are out of scope.
 
 ### 7.7 Sanity checks
@@ -427,7 +427,7 @@ Criteria
 | Indoor | from the washout day | ≥ 85 | 91 |
 | Indoor | blizzard: outdoor 10, snowfall 20 cm, gusts 60 (travel gate 0.7) | ≤ 75 | 67 |
 
-Invariants, tested on the fixtures and on generated inputs: every score within [0, 100]; 7 days per activity; ranks 1–7 unique; factors ordered by influence; gates multiply; with every travel gate at 1 the indoor order is the reverse of the outdoor order.
+Invariants, tested on the fixtures and on hand-built sweeps *(2026-09-14: this said "generated inputs". There are none, and there is no property-based library here; the sweeps are seven days that differ in one variable)*: every score within [0, 100]; 7 days per activity; ranks 1–7 unique; factors ordered by influence; gates multiply; with every travel gate at 1 the indoor order is the reverse of the outdoor order.
 
 Plausibility run, after the bands pass: `npm run score-fixture -- chamonix|lisbon|denver`. Paste the tables into the worklog and note anything that looks wrong. A wrong-looking number becomes a new row above (a failing test) before any curve moves.
 
@@ -579,7 +579,9 @@ Yoga masks unexpected errors by default. Keep that; throw `GraphQLError` only fo
 | Variable | Default | Purpose |
 |---|---|---|
 | `PORT` | `4000` | |
+| `HOST` | `127.0.0.1` | *(2026-09-14, D-028)* loopback, not every interface; the container sets `0.0.0.0` |
 | `DB_PATH` | `./data/app.db` | `:memory:` in tests |
+| `MAX_BODY_BYTES` | `32768` | *(2026-09-14, D-028)* refused before the handler reads it |
 | `OPEN_METEO_GEOCODING_URL` | `https://geocoding-api.open-meteo.com/v1/search` | |
 | `OPEN_METEO_FORECAST_URL` | `https://api.open-meteo.com/v1/forecast` | |
 | `OPEN_METEO_MARINE_URL` | `https://marine-api.open-meteo.com/v1/marine` | |
@@ -589,6 +591,7 @@ Yoga masks unexpected errors by default. Keep that; throw `GraphQLError` only fo
 | `MAX_STALE_HOURS` | `24` | beyond this, refresh inline |
 | `GEOCODE_TTL_DAYS` / `GEOCODE_MISS_TTL_HOURS` | `30` / `24` | |
 | `REFRESH_ENABLED` / `REFRESH_INTERVAL_MINUTES` / `REFRESH_ACTIVE_WINDOW_HOURS` | `true` / `10` / `24` | |
+| `REFRESH_MAX_LOCATIONS` | `200` | *(2026-09-14, D-028)* most towns one cycle will touch |
 | `SNAPSHOT_RETENTION_HOURS` | `48` | |
 | `LOG_LEVEL` | `info` | |
 
