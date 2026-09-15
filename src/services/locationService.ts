@@ -103,7 +103,23 @@ export function createLocationService(options: LocationServiceOptions): Location
       }
 
       // Only the top match is needed; prominence ordering means it is the right one.
-      const [top] = await geocode(city, countryCode, 1);
+      let top: GeocodingResult | undefined;
+      try {
+        [top] = await geocode(city, countryCode, 1);
+      } catch (error) {
+        // A town does not move, so an expired geocode is still the right answer when the
+        // geocoder is down. Refusing here would have claimed nothing was stored while the
+        // forecast for that same town was sitting in the database, servable (D-032).
+        if (cached?.location) {
+          logger.warn(
+            { city, error: String(error) },
+            'geocoder unavailable; serving the coordinates we already had',
+          );
+          repository.touch(cached.location.rowId, nowIso);
+          return { ...cached.location, lastRequestedAt: nowIso };
+        }
+        throw error;
+      }
 
       if (!top) {
         repository.cacheQuery(key, null, nowIso);

@@ -6,20 +6,31 @@ import type { LocationService } from '../../../src/services/locationService.js';
 import { createLocationService, NOT_FOUND } from '../../../src/services/locationService.js';
 import type { FixedClock } from '../../../src/services/clock.js';
 import { fixedClock } from '../../../src/services/clock.js';
-import type { FakeGeocoding, Store } from '../../helpers/services.js';
-import { DENVER, fakeGeocoding, geocodingResultFor, HOUR, LISBON, openStore, T0 } from '../../helpers/services.js';
+import type { FakeGeocoding, RecordingLogger, Store } from '../../helpers/services.js';
+import {
+  DENVER,
+  fakeGeocoding,
+  geocodingResultFor,
+  HOUR,
+  LISBON,
+  openStore,
+  recordingLogger,
+  T0,
+} from '../../helpers/services.js';
 
 describe('resolving a place', () => {
   let store: Store;
   let geocoding: FakeGeocoding;
   let clock: FixedClock;
+  let logger: RecordingLogger;
   let service: LocationService;
 
   beforeEach(() => {
     store = openStore();
     geocoding = fakeGeocoding([geocodingResultFor(LISBON)]);
     clock = fixedClock(T0);
-    service = createLocationService({ repository: store.locations, geocoding, clock });
+    logger = recordingLogger();
+    service = createLocationService({ repository: store.locations, geocoding, clock, logger });
   });
 
   it('geocodes a place it has never seen, and stores it', async () => {
@@ -124,6 +135,21 @@ describe('resolving a place', () => {
 
     const [active] = store.locations.recentlyRequested(T0);
     expect(active?.lastRequestedAt).toBe('2026-09-14T11:00:00.000Z');
+  });
+
+  it('serves a town it already knows when the geocoder is down', async () => {
+    // The coordinates of Lisbon are not news that expires. Refusing here claimed nothing
+    // was stored while the forecast for that same town sat in the database, servable
+    // (D-032).
+    const first = await service.resolve('Lisbon');
+    clock.advance(31 * 24 * HOUR); // past the 30-day geocode TTL
+    geocoding.failure = new Error('ECONNRESET');
+
+    const again = await service.resolve('Lisbon');
+
+    expect(again).not.toBe(NOT_FOUND);
+    expect(again === NOT_FOUND ? undefined : again.rowId).toBe(first === NOT_FOUND ? -1 : first.rowId);
+    expect(logger.warnings.some((one) => one.message.includes('geocoder unavailable'))).toBe(true);
   });
 
   it('reports a geocoder outage as an upstream failure', async () => {
