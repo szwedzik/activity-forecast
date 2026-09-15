@@ -19,7 +19,7 @@ What actually happened, in order. Newest at the bottom. Not polished on purpose.
 - installed skills antfu vitest, mcollina node, apollo graphql-schema
 - made a readme draft and added a MIT License.
 
-2026-09-14 >> Phase 0, ~1h
+2026-09-14 >> Phase 0
 - scaffold + fixtures, agent typed, I drove
 - deps written into package.json by hand, then a bare `npm install`. 93 packages. engine-strict=true went in clean on node 25.8, no EBADENGINE out of any dependency, which I was half expecting
 - my own guard hook blocked that install. it splits on `|` and read `2>&1` as a package name. strips redirections before counting now, `npm install zod` still refused. first real use of the thing and it was wrong
@@ -34,7 +34,7 @@ What actually happened, in order. Newest at the bottom. Not polished on purpose.
 - reviewer drove the guard with 24 command shapes including `npm install > /dev/null zod`, still blocked. it also caught two deviations I'd written here but not in decisions (D-013) and that the fixture readme had no base urls in it
 - P2: the query params live in the capture script. move them into the client or the fixtures drift from what we actually send
 
-2026-09-14 >> Phase 1, ~2h
+2026-09-14 >> Phase 1
 - pure domain: feature extraction, curve, engine, four activity tables, score-fixture script. 121 tests
 - every band row in D§7.7 passed first run, so the reference scores worked out on paper in the planning session hold against the code
 - the Criterion type in D§7.2 could not express two of surfing own criteria (period falls back swell -> wave, cleanliness is a ratio). widened it to a selector, D-014
@@ -55,7 +55,7 @@ What actually happened, in order. Newest at the bottom. Not polished on purpose.
 - smoke.test.ts stays. PHASES said P1 would replace it, but since D-013 it asserts node:sqlite exists, which nothing else does and P3 depends on
 - not done here: nothing
 
-2026-09-14 >> Phase 2, ~1h
+2026-09-14 >> Phase 2
 - three clients, zod schemas, http wrapper with timeout and one retry, haversine. 155 tests
 - own test caught a real bug: a 200 with a body that is not JSON was being retried. retryable was only about whether to serve stale, and I was also using it as the retry rule. now not-retryable gates the retry outright
 - looseObject not object, so a variable Open-Meteo adds later survives parsing instead of being stripped on the way to storage. there is a test that adds a field and checks it comes out the other end
@@ -70,7 +70,7 @@ What actually happened, in order. Newest at the bottom. Not polished on purpose.
 - left alone: response.ok is read outside the try in http.ts, so a Response-like object with a throwing getter would be misclassified. not reachable with real fetch, and guarding it costs more than it saves
 - not done here: nothing
 
-2026-09-14 >> Phase 3, ~1h
+2026-09-14 >> Phase 3
 - sqlite through node:sqlite, migrations tracked in schema_migrations, two repositories, a Clock. 199 tests
 - node:sqlite will not bind undefined at all, it throws. every optional column goes through an explicit null on the way in and back to undefined on the way out. found it by probing the API before writing against it, not by debugging later
 - upsert with ON CONFLICT ... RETURNING * keeps the row id and created_at while refreshing everything else, so re-resolving a place does not orphan its snapshots
@@ -94,7 +94,7 @@ What actually happened, in order. Newest at the bottom. Not polished on purpose.
 - also ran the whole spine end to end before committing, since nothing had ever been connected: fixture in, schemas, sqlite, read back out, re-validate, score. payload survives the text column byte for byte, inland stores as unavailable, lisbon wave cell measures 5.4 km offshore against the 5 the design recorded
 - not done here: nothing
 
-2026-09-14 >> Phase 4, ~2h
+2026-09-14 >> Phase 4
 - the refresh policy, which is the bit the brief is actually asking about. freshness, location resolution, ranking. 299 tests
 - wrote the state table down in plan mode before touching code, as the plan says. eight rows, eight tests named after them. that was the right order: rows 3 and 5 (recent but no longer covering the window) only exist because writing the table forced the question of whether recent and usable are the same thing
 - they are not, and that is the whole of D-019. an old snapshot scored for a week we have moved past gives seven days of insufficient data, which reads like an answer. serving it would be worse than the error
@@ -113,7 +113,7 @@ What actually happened, in order. Newest at the bottom. Not polished on purpose.
 - D-021 records which layer owns errors and logging, so P5 does not build a second vocabulary next to this one
 - not done here: nothing
 
-2026-09-14 >> Phase 5, ~2h
+2026-09-14 >> Phase 5
 - the API and the bootstrap. schema, scalars, errors, resolvers, config, pino, graceful shutdown. 331 tests, and the thing answers over HTTP for the first time
 - asked before touching the SDL, per my own rule. six DaySummary fields relaxed to nullable (D-022). the argument that decided it: every parent up the chain is non-null, so one missing temperature on day five would null the entire response, rankings included
 - lost the better part of an hour to seven integration failures where every coded error came back as INTERNAL_SERVER_ERROR. the same code returned the right codes under tsx. vitest transforms our source but leaves yoga external, so each side gets its own graphql module and yoga's instanceof check fails
@@ -155,7 +155,7 @@ What actually happened, in order. Newest at the bottom. Not polished on purpose.
 - left alone: a masked error loses path and locations. harmless to a client and the detail is in the log now
 - not done here: nothing
 
-2026-09-14 >> Phase 6, ~1h
+2026-09-14 >> Phase 6
 - the background refresher and retention. 365 tests. this is the last piece of D§6 and the smallest
 - split runCycle() out as public so the work is testable without timers. which calls a cycle makes has nothing to do with clocks, and threading fake timers through it would only make it harder to read. four small timer tests cover the rest
 - the one that would have been easy to get wrong: a marine source sitting at unavailable has to be skipped, not refreshed. treat it as "not fresh" and every cycle re-asks Open-Meteo whether Denver has a coastline, forever. the weekly recheck still happens because classify already turns it back to expired at 168h
@@ -183,3 +183,43 @@ What actually happened, in order. Newest at the bottom. Not polished on purpose.
 - passed on the second pass, and it mutation-tested eleven behaviours itself rather than taking my word for any of them. it also walked the shutdown path looking for a remaining way to leave the process alive and did not find one
 - one thing it left me: runCycle() is tracked but not guarded, so two concurrent calls would overwrite each other and stop() would wait on the second. nothing calls it but a test, so it is commented rather than changed
 - not done here: no watchdog around the server drain. on this node close() calls back immediately when the keep-alive sockets are idle, so only a request that never ends could park a shutdown. a README line in P7 rather than code now
+
+2026-09-14 >> Phase 7
+- shipping. README, Dockerfile, the three reviews, live checks, fresh clone. 378 tests
+- README follows D§12 except the four scoring tables, which are sixty lines of breakpoints in a file whose job is ten minutes to first query. one row per activity with criteria, weights and gates instead, read off the rule files so it cannot drift from the code, and a link to D§7 for the curves (D-027)
+- live checks: Chamonix, Lisbon, Denver, Sydney, Springfield with and without a country code, an unknown name. every invariant held on every one, and nothing logged a warning
+- Springfield with no country code is Missouri, with GB it is a village in Fife with a wave cell 9.7 km away and a flat sea. searchLocations lists five Springfields, all American, which is the honest reason the country code exists
+- Reykjavik comes back with no wave coverage. checked it against the marine API directly before believing it: 200 with every hour null, while Porto and Sydney return data. the global wave model has nothing inside Faxaflói, so that is the model's answer and not our bug
+- Docker Desktop was not running, so the Dockerfile got built and run rather than written and hoped over. two stages, non-root, 267 MB, and it answered for Porto and Biarritz
+- and it finally showed the thing Windows never could: SIGTERM in the container logs shutting down, then stopped, exit 0 in 299 ms. that line has been "not exercised automatically" since P5
+- ran three reviews as subagents rather than the slash commands, since those are the owner's to trigger. code, simplification, security. the first two found real bugs, the third found real holes
+- the worst one was mine to have caught long ago. D§2.2 said derive liquid rain as precipitation minus snowfall over 7, and 7:1 is right in matching units but precipitation is mm of water and snowfall is cm of snow. off by ten
+- so a -6 °C day with 14 cm of new snow on a 1.2 m base came out with 81 mm of rain, the rain-on-snow gate at 0.25, and skiing UNSUITABLE. the gate written for the worst day fired hardest on the best one. D-029
+- the test that should have caught it used 1 mm against 7 cm, where both the right answer and the wrong one clamp to zero. it passed for any divisor up to 7. no fixture has snow in it, so nothing else went near the path
+- confirmed the ratio against the live API before changing it: at -20 °C on the Greenland ice sheet, 0.1 mm of precipitation comes back as 0.07 cm of snow. then Ushuaia after the fix, where 1.75 cm against 2.5 mm leaves the rain criterion at exactly 1
+- second real bug: days with no wave data scored 100 and outranked a 1.4 m at 11 s. wave models run out before weather models do, so the criteria that remained were wind and air temperature, and a day we know nothing about looked perfect
+- D§7.2 declared an applicable hook per day and nobody built it. built, and surfing uses it: no wave height means NOT_APPLICABLE with a reason, which the D-012 sort already puts last. D-030
+- security: 32 KB body cap, ten root fields per operation, 200 towns per refresh cycle, CORS off, loopback bind. all four were demonstrated first, not guessed at: forty one-megabyte posts took the process from 104 MB to 1.97 GB, and three hundred aliases made nine hundred upstream calls out of a tier of ten thousand a day. D-028
+- indoor was publishing the opportunity rather than the desirability, so a day scoring 58 shipped a factor of 0.06. the factors are the product and they did not reconstruct the product. D-031
+- and the geocode cache was the only layer with no stale-on-error path: past thirty days with a dead geocoder it said nothing usable was stored, with the town and its forecast both in the database. D-032
+- everything above got a test that fails without the fix, checked by putting the bug back
+- removed: compareDates and daysBetween, which nothing outside their own test called, and two error factories in the graphql layer with no caller at all, one of them a second copy of a message a client actually sees. an integration test named for masking that asserts an upstream code got renamed to what it holds
+- left alone: the severe-weather gate written three times, the two URL builders, the storeOk duplication in forecastService, the Window map keyed by JSON. all trim rather than repair, and the last week of a take-home is the wrong time to move code that works
+- also left: one all-null marine response still pins a town for a week, which a second confirming call would fix. hoursInWindow is computed and never read. wetHours counts snow. all three in the README or the next-steps list rather than in the code
+- fresh clone from a temp directory: npm ci clean, 0 vulnerabilities, check green, and it served Reykjavik on the first request
+- reviewer passed it and then found four things still wrong in the docs. the open-meteo skill still carried the snow formula D-029 had just fixed, and CLAUDE.md says that skill loads by itself, so it is the first thing the next agent would read about units
+- two design lines still described the old indoor factor and the old geocode failure, four sections away from the corrections. and the README's outdoor row was missing the fog gate, which is exactly the drift D-027 said could not happen, on the table's first write
+- so there is a test on the README now. the table and the rule files have to agree on every weight and every gate, and the documented defaults have to match config. checked it by dropping a gate and by changing a default: both go red
+- it also found the configured refresh bound had no test: the repository's own default silently covered for a scheduler that forgot to pass it. one test with more towns than the bound closes that
+- not done here: no git remote exists, so push, CI green and making it public are the owner's to do
+
+2026-09-15 >> Phase 7, tail
+- read the brief again before pushing, against the finished thing rather than the plan
+- the worklog claimed roughly thirteen hours across eight phases and the commits span eighty-four minutes. those hour markers were estimates I never measured, in the one document whose whole value is being accurate. gone rather than replaced with better guesses
+- D§7.7 said the invariants run on generated inputs. there are none and no property library here; they run on three fixtures and hand-built sweeps. corrected in place, same as the snow formula, and it is the second time the design claimed something the code never did
+- factor effects are rounded where they are published. the first thing anyone sees in a response was 0.9350125 next to an integer score. indoor rounds before it takes its score from the number rather than after, so what it ships is what it used, checked across every outdoor score and gate
+- /health, and a container healthcheck that uses it. the container reports healthy
+- the README now says which activity is hollow and why. skiing is scored at the town rather than at the lifts, and Queenstown settled that it is not a hemisphere problem: late winter in New Zealand, no snow at 328 m, ski fields above 1600 m. Ushuaia was the only town I found where it comes back alive
+- and it says what I did not build. the brief asked for focus over volume, and the list of things I decided against was sitting in AGENTS.md where a reviewer would never look
+- replayed all five commits one at a time from a clean HEAD and ran the suite on each: 369, 381, 382, 380, 383. green in isolation, not only at the end
+- not done here: no snow fixture. the bug D-029 hid in was exactly the case three fixtures cannot reach, and capturing one needs a live call I did not want to make unasked

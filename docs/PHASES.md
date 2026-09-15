@@ -336,9 +336,9 @@ test/integration/**
 7. Push, confirm CI is green, make the repo public, send the "finished" note.
 
 **DoD.**
-- [ ] README answers: what, how to run, assumptions, limitations, next steps.
+- [x] README answers: what, how to run, assumptions, limitations, next steps.
 - [ ] CI green on `main`.
-- [ ] fresh clone runs.
-- [ ] WORKLOG has the final entry.
+- [x] fresh clone runs.
+- [x] WORKLOG has the final entry.
 
 **Commits.** `docs: README with run instructions, assumptions and limitations` · fix-ups as needed.

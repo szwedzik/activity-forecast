@@ -1,0 +1,22 @@
+# Everything the image does not need. Keeps the build context small and stops a local
+# data/ or node_modules from ending up in a layer.
+.git
+.github
+.githooks
+.claude
+node_modules
+dist
+coverage
+data
+*.db
+*.db-wal
+*.db-shm
+.env
+docs
+test
+scripts
+*.md
+task.pdf
+Dockerfile
+.dockerignore
+vitest.config.ts

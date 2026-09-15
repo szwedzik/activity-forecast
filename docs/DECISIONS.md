@@ -153,3 +153,37 @@ D-026 · 2026-09-14, P6 after review · a failed cycle must not be able to stop 
 - and from there: shutdown.ts had no guard of its own, index.ts calls void shutdown(signal), so the server stayed bound, the database stayed open, exit(0) was never reached, and the second ctrl-C was already swallowed by the stopping flag. a hang rather than a crash, which is the worse of the two to diagnose
 - fixed in both places. the scheduler tracks the cycle and swallows its failure when stopping; every step of the teardown is wrapped so a step that throws is logged and the remaining steps still run
 - one of the two would have closed this bug. both, because the teardown should not depend on the manners of whatever it is closing
+
+D-027 · 2026-09-14, P7 · the README summarises the four scoring tables rather than copying them
+- D§12 item 4 says copy them from D§7. Copied whole they are about sixty lines of curve breakpoints in a file whose first job is to get somebody running in ten minutes
+- so: one row per activity with its criteria, weights and gates, which is the part that says what the model believes, and a link to D§7 for the breakpoints and the reasoning
+- the weights and gates come off the rule files rather than the design. that was the whole argument for summarising, and the first draft still dropped a gate, so there is a test on it now: the README row and the shipped table have to agree on every weight and every gate, or the suite goes red
+
+D-028 · 2026-09-14, P7 · four things fixed before this goes public, three of them confirmed by probing
+- review found an unauthenticated caller can take the process down: Yoga buffers and parses a body before any check of ours, and caches the source and AST of every distinct query for an hour. forty one-megabyte requests took it from 104 MB to 1.97 GB
+- so a 32 KB cap before the handler, and the parse cache off. counting the stream instead of trusting Content-Length would mean consuming it, which leaves Yoga nothing to read, so a body that declares no length gets a 411
+- second: aliasing. five hundred aliases of searchLocations was five hundred geocoder calls, and three hundred of activityRankings was nine hundred upstream calls out of a free tier of ten thousand a day. a validation rule now caps an operation at ten root fields, following fragments so a spread cannot walk around it
+- third: that same request left three hundred rows the refresher then refetched every ten minutes for a day. one cycle now takes at most two hundred towns, newest first
+- fourth: Yoga's default CORS reflects whatever Origin it is handed and allows credentials. off. and the server binds loopback now rather than every interface while the log claimed localhost, with HOST for the container
+- not fixed: GraphiQL and introspection stay on, which is the point of a take-home somebody is meant to open. the README says so
+
+D-029 · 2026-09-14, P7 · snow to water was out by a factor of ten, and the design said so first
+- D§2.2 wrote `max(0, precipitation − snowfall / 7)` and called it 7:1. that ratio is right in matching units and this is not: precipitation is millimetres of water, snowfall is centimetres of snow
+- checked against the live API at −20 °C, where nothing can be falling as rain: 0.1 mm of precipitation comes back as 0.07 cm of snow. so a centimetre of snow is 1/0.7 mm of water, and the divisor is 0.7
+- the effect was the opposite of subtle. a −6 °C day with 14 cm of new snow on a 1.2 m base came out with 81 mm of rain, the rain-on-snow gate at 0.25, and skiing UNSUITABLE. the gate written to catch the worst day fired hardest on the best one
+- the test that should have caught it used 1 mm against 7 cm, where both the right answer and the wrong one clamp to zero. it passed for any divisor up to 7. no fixture contains snow at all, so nothing else went near the path
+- now: a pure-snow case and a mixed case that only agree with one divisor, and a ski day taken from a payload all the way to a band
+
+D-030 · 2026-09-14, P7 · a day with no sea is not a bad surfing day, it is not a surfing day
+- wave models run out before weather models do, so a coast can have three days of waves and four days of nothing. renormalising over the criteria that remain scored those four on wind and air temperature, gave them 100, and ranked them above a real 1.4 m at 11 s
+- D§7.2 declared an `applicable` hook per day and nobody implemented it. implemented, and surfing uses it: no wave height means NOT_APPLICABLE with a reason, which the D-012 sort already puts after every scored day
+- renormalising stays right everywhere else. it is the difference between a gap in a supporting measurement and a gap in the thing being measured
+- outdoor sightseeing has the same shape if precipitation goes missing, with seven of fifteen weight. left alone: Open-Meteo returns precipitation for land everywhere I have looked, and a rule per activity beats a rule in the engine I cannot demonstrate
+
+D-031 · 2026-09-14, P7 · indoor now publishes the number its score is made of
+- its one factor carried `1 − outdoor/100`, so a day scoring 58 shipped an effect of 0.06. the factors are the product and they did not reconstruct the product
+- publishes `0.55 + 0.45 × opportunity` instead, so one criterion times the gates gives the score exactly, the way every other activity already did. the outdoor score it came from stays in the factor's value
+
+D-032 · 2026-09-14, P7 · an expired geocode beats no answer
+- every other layer serves what it has when upstream is down. the geocode cache was the exception: past thirty days with a dead geocoder it raised UPSTREAM_UNAVAILABLE saying nothing usable was stored, while the town's row and its forecast were both sitting in the database
+- a town does not move. an expired hit is now served with a warning, and the failure only surfaces for a name we have never resolved
