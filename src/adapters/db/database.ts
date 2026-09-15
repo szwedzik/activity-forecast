@@ -208,6 +208,22 @@ export function migrate(
   return ran;
 }
 
+/**
+ * Whether the database will actually answer (D-033).
+ *
+ * A health check that only proves the process is listening says nothing the open socket
+ * had not already said. This is the cheapest question that can come back false: the file
+ * is gone, the handle is closed, the disk is unreadable.
+ */
+export function reachable(db: Database): boolean {
+  try {
+    db.prepare('SELECT 1').get();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function openDatabase(path: string, options: OpenOptions = {}): Database {
   const db = new DatabaseSync(path);
 

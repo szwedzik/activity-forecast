@@ -225,3 +225,9 @@ What actually happened, in order. Newest at the bottom. Not polished on purpose.
 - pushed. the repo had a LICENSE commit from GitHub's own repo creation, so the twenty local commits are rebased onto it rather than forced over it. identical file, only the line endings differed
 - CI green on main on both node versions, 19s and 15s. cloned the public repo into a temp directory and ran it there too: 121 files, npm ci clean, 383 tests, and task.pdf correctly absent
 - not done here: no snow fixture. the bug D-029 hid in was exactly the case three fixtures cannot reach, and capturing one needs a live call I did not want to make unasked
+
+2026-09-15 >> after the push
+- opened /health in a browser and got a white page. the endpoint was Yoga's, not mine: it installs one at /health unconditionally and its plugins run first, so my plugin never saw a request
+- my test had asserted a 200 and nothing else, which passed against Yoga's built-in for the whole time mine was dead code. an assertion on the status alone is not an assertion about whose code answered
+- ours owns the path now and says {"status":"ok","database":true}, 503 and false when the database will not answer. two tests, one of them closing the database to watch it fail. D-033
+- the container healthcheck was passing on the empty response too, for the same reason

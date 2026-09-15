@@ -11,7 +11,7 @@ import type { App } from '../../src/app.js';
 import { createApp } from '../../src/app.js';
 import { loadConfig } from '../../src/config.js';
 import { fixedClock } from '../../src/services/clock.js';
-import type { RecordingLogger, Store } from '../helpers/services.js';
+import type { FakeForecast, FakeGeocoding, RecordingLogger, Store } from '../helpers/services.js';
 import {
   fakeForecast,
   fakeGeocoding,
@@ -86,23 +86,44 @@ describe('the refresher inside the app', () => {
 });
 
 describe('the health endpoint', () => {
-  it('answers without touching the database or Open-Meteo', async () => {
-    const store = openStore();
-    const geocoding = fakeGeocoding([geocodingResultFor(LISBON)]);
-    const forecast = fakeForecast();
-    const app = createApp({
+  const build = (store: Store, geocoding: FakeGeocoding, forecast: FakeForecast): App =>
+    createApp({
       config: loadConfig({}),
       clock: fixedClock(T0),
       db: store.db,
       clients: { geocoding, forecast, marine: fakeMarine() },
     });
 
+  it('says it is well, in words, without spending an upstream call', async () => {
+    // Yoga's own health endpoint answers 200 with an empty body: a white page in a
+    // browser, and nothing an open socket had not already proved (D-033).
+    const store = openStore();
+    const geocoding = fakeGeocoding([geocodingResultFor(LISBON)]);
+    const forecast = fakeForecast();
+    const app = build(store, geocoding, forecast);
+
     const response = await app.yoga.fetch('http://localhost/health');
 
     expect(response.status).toBe(200);
-    // An orchestrator asking whether we are alive should not cost an upstream call.
+    expect(response.headers.get('content-type')).toContain('application/json');
+    expect(await response.json()).toEqual({ status: 'ok', database: true });
     expect(geocoding.calls).toEqual([]);
     expect(forecast.calls).toEqual([]);
+
+    await app.close();
+  });
+
+  it('says it is not well when the database will not answer', async () => {
+    // The only part that can be false while the process is still listening, which is the
+    // whole reason the endpoint asks it.
+    const store = openStore();
+    const app = build(store, fakeGeocoding([]), fakeForecast());
+    store.db.close();
+
+    const response = await app.yoga.fetch('http://localhost/health');
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ status: 'unavailable', database: false });
 
     await app.close();
   });

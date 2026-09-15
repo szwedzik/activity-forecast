@@ -73,7 +73,7 @@ npm run dev        GraphiQL on http://localhost:4000/graphql
 npm run check      typecheck and the full test suite
 ```
 
-No API key and no account: Open-Meteo's non-commercial tier needs neither, and there is nothing else to configure. The database is created on first run at `./data/app.db`. `GET /health` answers without touching it.
+No API key and no account: Open-Meteo's non-commercial tier needs neither, and there is nothing else to configure. The database is created on first run at `./data/app.db`. `GET /health` returns `{"status":"ok","database":true}`, or a 503 if the database stops answering, which is the only part that can fail while the process is still listening.
 
 In Docker:
 

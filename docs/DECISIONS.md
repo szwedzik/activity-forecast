@@ -187,3 +187,10 @@ D-031 · 2026-09-14, P7 · indoor now publishes the number its score is made of
 D-032 · 2026-09-14, P7 · an expired geocode beats no answer
 - every other layer serves what it has when upstream is down. the geocode cache was the exception: past thirty days with a dead geocoder it raised UPSTREAM_UNAVAILABLE saying nothing usable was stored, while the town's row and its forecast were both sitting in the database
 - a town does not move. an expired hit is now served with a warning, and the failure only surfaces for a name we have never resolved
+
+D-033 · 2026-09-15, P7 after the push · the health endpoint answers something
+- caught by running it and opening the page rather than by a test: 200 with an empty body and no content-type. a white page in a browser, and nothing the open socket had not already proved
+- worse, my own test had asserted the status and nothing else, so it passed against Yoga's built-in endpoint and never once exercised the code I had written. Yoga installs /health unconditionally and its plugins run before ours
+- so Yoga's is moved to a path of its own and ours owns /health: {"status":"ok","database":true}, or 503 and database false. the SELECT 1 lives in the db adapter, not in app.ts
+- the database is the only part that can be false while the process is still listening, which is the only reason the endpoint is worth having
+- a liveness probe that fails on a dependency can get a healthy process restarted. accepted here: one process, one SQLite file, and if the file is unreadable this cannot serve anything anyway
