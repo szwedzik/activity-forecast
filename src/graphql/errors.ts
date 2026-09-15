@@ -15,12 +15,6 @@ const coded = (code: string, message: string): GraphQLError =>
 
 export const badUserInput = (message: string): GraphQLError => coded('BAD_USER_INPUT', message);
 
-export const locationNotFound = (city: string): GraphQLError =>
-  coded('LOCATION_NOT_FOUND', `No place matched "${city}".`);
-
-export const upstreamUnavailable = (message: string): GraphQLError =>
-  coded('UPSTREAM_UNAVAILABLE', message);
-
 /**
  * Services already speak in codes (D-021), so this translates rather than inventing a
  * second vocabulary. The cause is deliberately not attached: it would make the result

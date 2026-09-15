@@ -411,8 +411,9 @@ describe('the GraphQL API', () => {
       expect(code(body)).toBe('BAD_USER_INPUT');
     });
 
-    it('masks anything unexpected instead of leaking it', async () => {
-      // A bug is not a contract. Yoga replaces it, and the client learns nothing.
+    it('turns a dead geocoder into an upstream code, not a stack trace', async () => {
+      // Masking proper is in masking.test.ts; what this one holds is that the service
+      // wraps a failed search before anything gets a chance to leak.
       geocoding.failure = Object.assign(new Error('secret internal detail'), { name: 'TypeError' });
 
       const body = await ask(/* GraphQL */ `

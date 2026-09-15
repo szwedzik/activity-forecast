@@ -2,10 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   addDays,
-  compareDates,
   dateOf,
   dateRange,
-  daysBetween,
   hourOf,
   isLocalDate,
 } from '../../../../src/domain/forecast/localDate.js';
@@ -60,19 +58,6 @@ describe('dateRange', () => {
   });
 });
 
-describe('compareDates and daysBetween', () => {
-  it('orders dates', () => {
-    expect(compareDates('2026-09-14', '2026-09-15')).toBeLessThan(0);
-    expect(compareDates('2026-09-15', '2026-09-14')).toBeGreaterThan(0);
-    expect(compareDates('2026-09-14', '2026-09-14')).toBe(0);
-  });
-
-  it('counts whole days in both directions', () => {
-    expect(daysBetween('2026-09-14', '2026-09-21')).toBe(7);
-    expect(daysBetween('2026-09-21', '2026-09-14')).toBe(-7);
-    expect(daysBetween('2026-09-14', '2026-09-14')).toBe(0);
-  });
-});
 
 describe('parsing Open-Meteo timestamps', () => {
   it('splits a local timestamp into date and hour', () => {

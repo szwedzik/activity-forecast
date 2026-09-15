@@ -32,16 +32,6 @@ export function dateRange(start: string, count: number): string[] {
   return dates;
 }
 
-/** Negative, zero or positive, like any comparator. */
-export function compareDates(a: string, b: string): number {
-  return toUtcMillis(a) - toUtcMillis(b);
-}
-
-/** Whole days from `from` to `to`; negative when `to` is earlier. */
-export function daysBetween(from: string, to: string): number {
-  return Math.round((toUtcMillis(to) - toUtcMillis(from)) / MS_PER_DAY);
-}
-
 /** The date part of an Open-Meteo local timestamp, `2026-09-14T13:00` → `2026-09-14`. */
 export function dateOf(timestamp: string): string {
   return timestamp.slice(0, 10);
